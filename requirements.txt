@@ -1,0 +1,6 @@
+ttkbootstrap>=1.6.0
+reportlab>=3.6.0
+pywin32
+Pillow
+# qrcode (if you later add QR generation): qrcode
+PyMuPDF
