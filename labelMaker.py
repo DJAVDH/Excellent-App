@@ -45,7 +45,7 @@ class LabelMakerApp:
 
         ttk.Label(frm, text="Transport:").grid(row=1, column=0, sticky='w')
         self.sea_air_var = tk.StringVar(value="Sea")
-        self.sea_air_menu = ttk.Combobox(frm, textvariable=self.sea_air_var, values=["Sea", "Air", "Truck"], state="readonly")
+        self.sea_air_menu = ttk.Combobox(frm, textvariable=self.sea_air_var, values=["Sea", "Air", "Road"], state="readonly")
         self.sea_air_menu.grid(row=1, column=1, sticky='w')
 
         ttk.Label(frm, text="TO:").grid(row=2, column=0, sticky='w')
@@ -71,32 +71,25 @@ class LabelMakerApp:
         self.pages_entry = ttk.Entry(frm, textvariable=self.pages_var)
         self.pages_entry.grid(row=6, column=1, sticky='ew')
 
-        # sticker count display
         self.sticker_label = ttk.Label(frm, text="Aantal stickers: 24")
         self.sticker_label.grid(row=7, column=0, columnspan=2, sticky='w')
 
-        # update sticker count when pages change
         self.pages_var.trace_add('write', lambda *args: self.update_sticker_count())
 
-        # Printer selectie
         ttk.Label(frm, text="Printer:").grid(row=8, column=0, sticky='w')
         self.printer_var = tk.StringVar(value="")
         self.printer_menu = ttk.Combobox(frm, textvariable=self.printer_var, state="readonly")
         self.printer_menu.grid(row=8, column=1, sticky='ew')
         self.printer_var.trace_add('write', lambda *args: self.load_config())
-        # Detect printers in background to avoid blocking GUI on startup
         threading.Thread(target=self._detect_printers_bg, daemon=True).start()
 
-        # Tray selectie (friendly numbers)
         ttk.Label(frm, text="Papierlade:").grid(row=9, column=0, sticky='w')
         self.tray_var = tk.StringVar()
-        # gebruik leesbare namen, nummer 2 krijgt een duidelijk label
         self._tray_display = ["1", "Stickers (3)", "3", "4"]
-        # map displaywaarde naar echte tray-code
         self._tray_map = {"1":1, "Stickers (3)":2, "3":3, "4":4}
         self.tray_menu = ttk.Combobox(frm, textvariable=self.tray_var, values=self._tray_display, state="readonly")
         self.tray_menu.grid(row=9, column=1, sticky='w')
-        self.tray_menu.set("Stickers (3)")  # geef automatisch de aangepaste naam weer
+        self.tray_menu.set("Stickers (3)") 
 
         self.top_var = tk.BooleanVar(value=False)
         self.top_check = ttk.Checkbutton(frm, text="Venster altijd vooraan", variable=self.top_var, command=self.toggle_top)
@@ -107,8 +100,6 @@ class LabelMakerApp:
 
         self.print_btn = ttk.Button(frm, text="Direct Printen", command=self.print_direct)
         self.print_btn.grid(row=11, column=1, pady=(10, 0), sticky='ew')
-
-        # debug knoppen verwijderd
 
         self.clear_btn = ttk.Button(frm, text="Leegmaken", command=self.clear_fields, style="Danger.TButton")
         self.clear_btn.grid(row=12, column=1, pady=(10, 0), sticky='ew')
@@ -123,8 +114,6 @@ class LabelMakerApp:
         self.root.attributes("-topmost", self.top_var.get())
 
     def refresh_printers(self):
-        """Detecteer alle beschikbare printers"""
-        # kept for compatibility; call _detect_printers_bg instead to run async
         threading.Thread(target=self._detect_printers_bg, daemon=True).start()
 
     def _detect_printers_bg(self):
@@ -138,7 +127,6 @@ class LabelMakerApp:
             try:
                 self.printer_menu['values'] = printer_names
                 if printer_names and not self.printer_menu.get():
-                    # prefer any printer whose name contains 'Canon'
                     canon = next((p for p in printer_names if 'Canon' in p or 'canon' in p), None)
                     if canon:
                         self.printer_menu.set(canon)
@@ -153,20 +141,15 @@ class LabelMakerApp:
             apply_names()
 
     def show_printer_info(self):
-        # removed diagnostic helper
         messagebox.showinfo("Info", "Printer-informatie functie verwijderd.")
 
     def show_printer_props(self):
-        """Open the printer properties dialog for the selected printer."""
-        # removed properties helper
         messagebox.showinfo("Info", "Printer eigenschappen functie verwijderd.")
 
     def load_config(self):
-        # config support removed
         return
 
     def save_config(self):
-        # config support removed
         return
 
     def clear_fields(self):
@@ -174,7 +157,6 @@ class LabelMakerApp:
         self.sea_air_var.set("Sea")
         self.to_entry.delete(0, tk.END)
         self.ref_entry.delete(0, tk.END)
-        # FM blijft NETHERLANDS
         self.startnum_entry.delete(0, tk.END)
         self.startnum_entry.insert(0, "1")
         self.pages_entry.delete(0, tk.END)
@@ -182,7 +164,6 @@ class LabelMakerApp:
         self.update_sticker_count()
 
     def update_sticker_count(self):
-        # compute total stickers based on pages
         try:
             paginas = int(self.pages_var.get())
             totaal = paginas * LABELS_PER_PAGE
@@ -217,37 +198,41 @@ class LabelMakerApp:
             row = pos_in_page // LABELS_PER_ROW
             col = pos_in_page % LABELS_PER_ROW
 
-            x = col * LABEL_WIDTH + 5 * mm
-            y = PAGE_HEIGHT - ((row + 1) * LABEL_HEIGHT) - 2 * mm
+            x = col * LABEL_WIDTH
+            y = PAGE_HEIGHT - (0.5 * mm) - ((row + 1) * LABEL_HEIGHT)
 
             nummer = startnummer + i
             nummer_str = f"#{nummer:03d}"
 
-            text_x = x + 2 * mm
-            text_y = y + LABEL_HEIGHT - 7 * mm
+            # NIEUW: Veilige marges van 7mm aan zijkanten, 8mm onder, en nu 9mm vanaf de bovenkant!
+            pad_x = 7 * mm
+            pad_y_bottom = 8 * mm
+            pad_y_top = 9 * mm
+            
+            text_x = x + pad_x 
+            text_y = y + LABEL_HEIGHT - pad_y_top
 
             c.setFont("Helvetica", 10)
             c.drawString(text_x, text_y, achternaam)
 
             c.setFont("Helvetica-Bold", 19)
-            sea_air_x = x + LABEL_WIDTH - 18 * mm
+            sea_air_x = x + LABEL_WIDTH - pad_x 
             c.drawRightString(sea_air_x, text_y - 1.75, sea_air)
 
             c.setFont("Helvetica", 10)
             c.drawString(text_x, text_y - 13, f"FM: {fm}")
             c.drawString(text_x, text_y - 25, f"TO: {to}")
 
-            c.drawString(text_x, y + 9 * mm, referentie)
+            c.drawString(text_x, y + pad_y_bottom, referentie)
 
             c.setFont("Helvetica-Bold", 19)
-            c.drawRightString(x + LABEL_WIDTH - 12 * mm, y + 9 * mm, nummer_str)
+            c.drawRightString(x + LABEL_WIDTH - pad_x, y + pad_y_bottom, nummer_str)
 
             if pos_in_page == LABELS_PER_PAGE - 1 and i != total_labels - 1:
                 c.showPage()
 
         c.save()
 
-        # Open automatisch
         pdf_path = os.path.abspath("labels.pdf")
         if platform.system() == "Windows":
             os.startfile(pdf_path)
@@ -259,15 +244,10 @@ class LabelMakerApp:
         messagebox.showinfo("Klaar", f"labels.pdf gegenereerd met {total_labels} labels.")
 
     def render_labels_pages(self, total_labels, startnummer, achternaam, sea_air, to, referentie, fm, dpi=300):
-        """Render labels per A4 page using Pillow at given DPI and return list of PIL Images.
-
-        dpi: printer DPI (horizontal). Uses same DPI for vertical for simplicity.
-        """
         A4_MM = (210, 297)
         px_w = int(A4_MM[0] / 25.4 * dpi)
         px_h = int(A4_MM[1] / 25.4 * dpi)
 
-        # label sizes in px based on mm sizes
         label_w = int((70) / 25.4 * dpi)
         label_h = int((37) / 25.4 * dpi)
         left_margin = int(5 / 25.4 * dpi)
@@ -276,7 +256,6 @@ class LabelMakerApp:
         pages = []
         labels_per_page = LABELS_PER_PAGE
 
-        # fonts: try to pick a TTF for consistent sizing, fallback to default
         try:
             font_small = ImageFont.truetype("arial.ttf", int(10 / 25.4 * dpi))
             font_large = ImageFont.truetype("arialbd.ttf", int(19 / 25.4 * dpi))
@@ -292,17 +271,12 @@ class LabelMakerApp:
                 idx = page_start + i
                 if idx >= total_labels:
                     break
-
                 row = i // LABELS_PER_ROW
                 col = i % LABELS_PER_ROW
-
                 x = col * label_w + left_margin
                 y = row * label_h + top_offset
-
                 nummer = startnummer + idx
                 nummer_str = f"#{nummer:03d}"
-
-                # draw texts at positions using px coordinates
                 draw.text((x + int(2 / 25.4 * dpi), y + int(2 / 25.4 * dpi)), achternaam, font=font_small, fill="black")
                 draw.text((x + label_w - int(18 / 25.4 * dpi), y + int(2 / 25.4 * dpi)), sea_air, font=font_large, fill="black")
                 draw.text((x + int(2 / 25.4 * dpi), y + int(6 / 25.4 * dpi)), f"FM: {fm}", font=font_small, fill="black")
@@ -311,17 +285,10 @@ class LabelMakerApp:
                 draw.text((x + label_w - int(12 / 25.4 * dpi), y + int(27 / 25.4 * dpi)), nummer_str, font=font_large, fill="black")
 
             pages.append(img)
-
         return pages
 
     def print_via_gdi(self, printer_name, images, source_code):
-        """Print list of PIL images to printer via GDI (win32ui).
-
-        source_code is the raw DEVMODE source/tray code (integer) applied before printing.
-        Returns True/False.
-        """
         try:
-            # Attempt to set DEVMODE tray if possible
             try:
                 hPrinter = win32print.OpenPrinter(printer_name)
                 pinfo = win32print.GetPrinter(hPrinter, 2)
@@ -348,47 +315,41 @@ class LabelMakerApp:
                         pass
                 win32print.ClosePrinter(hPrinter)
             except Exception:
-                # ignore errors setting devmode in normal operation
                 pass
 
-            # Create printer DC
             hDC = win32ui.CreateDC()
             hDC.CreatePrinterDC(printer_name)
 
             for idx, img in enumerate(images):
-                # Convert image to BMP mode suitable for DIB
                 if img.mode != 'RGB':
                     bmp = img.convert('RGB')
                 else:
                     bmp = img
 
-                # Start doc/page
                 hDC.StartDoc(f"Labels_{idx}")
                 hDC.StartPage()
 
-                # compute page pixel size from printer DPI
                 try:
                     dpi_x = hDC.GetDeviceCaps(win32con.LOGPIXELSX)
                     dpi_y = hDC.GetDeviceCaps(win32con.LOGPIXELSY)
                 except Exception:
                     dpi_x = dpi_y = 300
 
-                page_px_w = int(210 / 25.4 * dpi_x)
-                page_px_h = int(297 / 25.4 * dpi_y)
-
-                # printable area (may be smaller due to margins)
-                pr_w = hDC.GetDeviceCaps(win32con.HORZRES)
-                pr_h = hDC.GetDeviceCaps(win32con.VERTRES)
-                # scale factor to fit
-                scale = min(pr_w / page_px_w, pr_h / page_px_h)
-                draw_w = int(page_px_w * scale)
-                draw_h = int(page_px_h * scale)
+                try:
+                    phys_off_x = hDC.GetDeviceCaps(112)
+                    phys_off_y = hDC.GetDeviceCaps(113)
+                except Exception:
+                    phys_off_x = 0
+                    phys_off_y = 0
 
                 bmp_dib = ImageWin.Dib(bmp)
-                # draw scaled so nothing clipped, center if smaller
-                xoff = (pr_w - draw_w)//2
-                yoff = (pr_h - draw_h)//2
-                bmp_dib.draw(hDC.GetHandleOutput(), (xoff, yoff, xoff+draw_w, yoff+draw_h))
+                
+                dest_x1 = -phys_off_x
+                dest_y1 = -phys_off_y
+                dest_x2 = bmp.size[0] - phys_off_x
+                dest_y2 = bmp.size[1] - phys_off_y
+                
+                bmp_dib.draw(hDC.GetHandleOutput(), (dest_x1, dest_y1, dest_x2, dest_y2))
 
                 hDC.EndPage()
                 hDC.EndDoc()
@@ -404,7 +365,6 @@ class LabelMakerApp:
             return False
 
     def print_direct(self):
-        """Direct naar printer sturen met tray selectie"""
         if not self.printer_var.get():
             messagebox.showerror("Fout", "Selecteer eerst een printer.")
             return
@@ -428,7 +388,6 @@ class LabelMakerApp:
 
         total_labels = paginas * LABELS_PER_PAGE
 
-        # Determine printer DPI so we render at exact physical size
         printer_name = self.printer_var.get()
         sel = self.tray_var.get()
         tray_number = self._tray_map.get(sel, 1)
@@ -448,7 +407,6 @@ class LabelMakerApp:
         except Exception:
             dpi_x = dpi_y = 300
 
-        # Generate PDF to a temporary file (exact same layout as gen_pdf)
         pdf_filename = os.path.abspath("labels_print.pdf")
         c = canvas.Canvas(pdf_filename, pagesize=A4)
         for i in range(total_labels):
@@ -456,37 +414,41 @@ class LabelMakerApp:
             row = pos_in_page // LABELS_PER_ROW
             col = pos_in_page % LABELS_PER_ROW
 
-            x = col * LABEL_WIDTH + 5 * mm
-            y = PAGE_HEIGHT - ((row + 1) * LABEL_HEIGHT) - 2 * mm
+            x = col * LABEL_WIDTH
+            y = PAGE_HEIGHT - (0.5 * mm) - ((row + 1) * LABEL_HEIGHT)
 
             nummer = startnummer + i
             nummer_str = f"#{nummer:03d}"
 
-            text_x = x + 2 * mm
-            text_y = y + LABEL_HEIGHT - 7 * mm
+            # NIEUW: Veilige marges van 7mm aan zijkanten, 8mm onder, en nu 9mm vanaf de bovenkant!
+            pad_x = 7 * mm
+            pad_y_bottom = 8 * mm
+            pad_y_top = 9 * mm
+
+            text_x = x + pad_x 
+            text_y = y + LABEL_HEIGHT - pad_y_top
 
             c.setFont("Helvetica", 10)
             c.drawString(text_x, text_y, achternaam)
 
             c.setFont("Helvetica-Bold", 19)
-            sea_air_x = x + LABEL_WIDTH - 18 * mm
+            sea_air_x = x + LABEL_WIDTH - pad_x 
             c.drawRightString(sea_air_x, text_y - 1.75, sea_air)
 
             c.setFont("Helvetica", 10)
             c.drawString(text_x, text_y - 13, f"FM: {fm}")
             c.drawString(text_x, text_y - 25, f"TO: {to}")
 
-            c.drawString(text_x, y + 9 * mm, referentie)
+            c.drawString(text_x, y + pad_y_bottom, referentie)
 
             c.setFont("Helvetica-Bold", 19)
-            c.drawRightString(x + LABEL_WIDTH - 12 * mm, y + 9 * mm, nummer_str)
+            c.drawRightString(x + LABEL_WIDTH - pad_x, y + pad_y_bottom, nummer_str)
 
             if pos_in_page == LABELS_PER_PAGE - 1 and i != total_labels - 1:
                 c.showPage()
 
         c.save()
 
-        # Render PDF pages to images at printer DPI using PyMuPDF (import when needed)
         images = []
         try:
             import fitz
@@ -503,14 +465,12 @@ class LabelMakerApp:
             messagebox.showerror("Fout", f"Kon PDF niet renderen: {e}")
             return
 
-        # Print via GDI (win32ui)
         ok = self.print_via_gdi(printer_name, images, raw_code)
         if ok:
-            messagebox.showinfo("Succes", f"Print opdracht naar {printer_name} (lade {tray_number}, code {raw_code}) verstuurd.\n{total_labels} labels")
+            messagebox.showinfo("Succes", f"Print opdracht naar {printer_name} (lade {tray_number}) verstuurd.\n{total_labels} labels")
         else:
-            messagebox.showerror("Fout", "Kon niet printen via GDI. Controleer drivers of probeer andere driver-modi (PCL/PS/UFR).")
+            messagebox.showerror("Fout", "Kon niet printen via GDI.")
 
-# ------ START APP ------
 if __name__ == "__main__":
     root = tk.Tk()
     app = LabelMakerApp(root)
