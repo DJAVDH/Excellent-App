@@ -244,12 +244,15 @@ class ExcellentApp:
         tk.Label(ui, text=display, bg=BG_SIDEBAR, fg=TEXT_DARK,
                  font=(FONT, 9, "bold"), anchor="w",
                  wraplength=130).pack(anchor="w")
-        tk.Button(ui, text="Uitloggen", command=self._do_logout,
-                  bg=BG_SIDEBAR, fg=TEXT_MUTED,
-                  activebackground=BORDER, activeforeground=TEXT_DARK,
-                  font=(FONT, 7, "underline"), bd=0, relief=tk.FLAT,
-                  cursor="hand2", anchor="w", padx=0
-                  ).pack(anchor="w")
+        tk.Label(ui, text="Ingelogd", bg=BG_SIDEBAR, fg=TEXT_MUTED,
+                 font=(FONT, 7), anchor="w").pack(anchor="w")
+
+        logout_btn = tk.Button(sb, text="↩  Uitloggen", command=self._do_logout,
+                               bg="#FFF0F0", fg="#C62828",
+                               activebackground="#FFCDD2", activeforeground="#B71C1C",
+                               font=(FONT, 9), bd=0, relief=tk.FLAT,
+                               pady=7, cursor="hand2")
+        logout_btn.pack(fill=tk.X, padx=16, pady=(8, 10))
 
         # ── Versie ───────────────────────────────────────────────────────────
         tk.Frame(sb, bg=BORDER, height=1).pack(fill=tk.X, padx=16)
