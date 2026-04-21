@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 from supabase import create_client, Client
 
@@ -6,7 +7,8 @@ SUPABASE_URL         = "__SUPABASE_URL__"
 SUPABASE_KEY         = "__SUPABASE_KEY__"
 SUPABASE_SERVICE_KEY = "__SUPABASE_SERVICE_KEY__"
 
-_SESSION_FILE = os.path.join(os.path.abspath(os.path.dirname(__file__)), "session.json")
+_BASE_DIR = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.abspath(os.path.dirname(__file__))
+_SESSION_FILE = os.path.join(_BASE_DIR, "session.json")
 
 _client: Client | None = None
 _admin_client: Client | None = None
