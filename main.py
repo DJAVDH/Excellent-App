@@ -1165,8 +1165,9 @@ def _check_for_update(root: tk.Tk):
             with open(bat, "w") as f:
                 f.write(
                     "@echo off\n"
-                    "ping 127.0.0.1 -n 3 > nul\n"
+                    "timeout /t 6 /nobreak > nul\n"
                     f'copy /Y "{tmp}" "{current_exe}"\n'
+                    "timeout /t 2 /nobreak > nul\n"
                     f'start "" "{current_exe}"\n'
                     "del \"%~f0\"\n"
                 )
