@@ -951,6 +951,12 @@ class ExcellentApp:
                           command=lambda e=email, a=is_ad: self._admin_toggle_role(e, a)
                           ).pack(side=tk.LEFT, padx=(0, 8))
 
+                tk.Button(act, text="Reset wachtwoord", fg="#1565C0", bg=row_bg,
+                          activebackground=BORDER, bd=0, relief=tk.FLAT,
+                          font=(FONT, 8, "underline"), cursor="hand2",
+                          command=lambda e=email: self._admin_reset_user_pw(e)
+                          ).pack(side=tk.LEFT, padx=(0, 8))
+
                 if email != sc.get_user_email():
                     tk.Button(act, text="Verwijder", fg="#C62828", bg=row_bg,
                               activebackground=BORDER, bd=0, relief=tk.FLAT,
@@ -1037,6 +1043,16 @@ class ExcellentApp:
             except Exception:
                 pass
             self.show_admin_page()
+        except Exception as e:
+            messagebox.showerror("Fout", str(e))
+
+    def _admin_reset_user_pw(self, email):
+        if not messagebox.askyesno("Reset wachtwoord",
+                                   f"Reset-link sturen naar:\n{email}?"):
+            return
+        try:
+            sc.reset_password(email)
+            messagebox.showinfo("Verstuurd", f"Reset-link verstuurd naar {email}.")
         except Exception as e:
             messagebox.showerror("Fout", str(e))
 
