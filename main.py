@@ -257,7 +257,7 @@ class ExcellentApp:
         ).pack(side=tk.LEFT)
 
         tk.Frame(sb, bg=BORDER, height=1).pack(fill=tk.X, padx=16)
-        tk.Label(sb, text="v1.0  •  Excellent App",
+        tk.Label(sb, text=f"{VERSION}  •  Excellent App",
                  bg=BG_SIDEBAR, fg=TEXT_MUTED,
                  font=(FONT, 7), anchor="w",
                  padx=20).pack(fill=tk.X, pady=8)
