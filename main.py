@@ -176,40 +176,6 @@ class ExcellentApp:
         # ── Scheidingslijn ───────────────────────────────────────────────────
         tk.Frame(sb, bg=BORDER, height=1).pack(fill=tk.X, padx=16, pady=10)
 
-        # ── Gebruiker / avatar ───────────────────────────────────────────────
-        user_row = tk.Frame(sb, bg=BG_SIDEBAR)
-        user_row.pack(fill=tk.X, padx=16, pady=(0, 4))
-
-        email = sc.get_user_email()
-        initials = (email[:2].upper() if email else "EP")
-
-        av = tk.Canvas(user_row, width=38, height=38,
-                       bg=BG_SIDEBAR, highlightthickness=0)
-        av.pack(side=tk.LEFT)
-        av.create_oval(2, 2, 36, 36, fill=ACCENT, outline="")
-        av.create_text(19, 19, text=initials, fill=TEXT_LIGHT,
-                       font=(FONT, 10, "bold"))
-
-        ui = tk.Frame(user_row, bg=BG_SIDEBAR)
-        ui.pack(side=tk.LEFT, padx=(10, 0))
-        display = email if email else "Gebruiker"
-        tk.Label(ui, text=display, bg=BG_SIDEBAR, fg=TEXT_DARK,
-                 font=(FONT, 9, "bold"), anchor="w",
-                 wraplength=130).pack(anchor="w")
-        tk.Label(ui, text="Excellent B.V.", bg=BG_SIDEBAR, fg=TEXT_MUTED,
-                 font=(FONT, 7), anchor="w").pack(anchor="w")
-
-        # Uitloggen knop
-        tk.Button(sb, text="Uitloggen", command=self._do_logout,
-                  bg="#F7F9FC", fg=TEXT_MUTED,
-                  activebackground=BORDER, activeforeground=TEXT_DARK,
-                  font=(FONT, 8), bd=0, relief=tk.FLAT,
-                  pady=4, cursor="hand2"
-                  ).pack(fill=tk.X, padx=16, pady=(0, 4))
-
-        # ── Scheidingslijn ───────────────────────────────────────────────────
-        tk.Frame(sb, bg=BORDER, height=1).pack(fill=tk.X, padx=16, pady=(0, 6))
-
         # ── Menu-label ───────────────────────────────────────────────────────
         tk.Label(sb, text="NAVIGATIE", bg=BG_SIDEBAR, fg=TEXT_MUTED,
                  font=(FONT, 7, "bold"), anchor="w",
@@ -225,7 +191,7 @@ class ExcellentApp:
         if sc.is_admin():
             self._make_nav_btn("⚙", "Admin", self.show_admin_page)
 
-        # ── Versie onderaan ──────────────────────────────────────────────────
+        # ── Spacer ───────────────────────────────────────────────────────────
         tk.Frame(sb, bg=BG_SIDEBAR).pack(fill=tk.BOTH, expand=True)
 
         # ── Altijd vooraan toggle ────────────────────────────────────────────
@@ -236,7 +202,6 @@ class ExcellentApp:
 
         self._topmost_var = tk.BooleanVar(value=False)
 
-        # Indicator-bolletje (canvas) dat groen wordt als actief
         self._topmost_indicator = tk.Canvas(topmost_row, width=14, height=14,
                                             bg=BG_SIDEBAR, highlightthickness=0)
         self._topmost_indicator.pack(side=tk.LEFT, padx=(4, 6))
@@ -256,6 +221,37 @@ class ExcellentApp:
             anchor="w"
         ).pack(side=tk.LEFT)
 
+        # ── Scheidingslijn ───────────────────────────────────────────────────
+        tk.Frame(sb, bg=BORDER, height=1).pack(fill=tk.X, padx=16)
+
+        # ── Gebruiker / avatar + uitloggen ───────────────────────────────────
+        email = sc.get_user_email()
+        initials = (email[:2].upper() if email else "EP")
+
+        user_row = tk.Frame(sb, bg=BG_SIDEBAR)
+        user_row.pack(fill=tk.X, padx=16, pady=(10, 6))
+
+        av = tk.Canvas(user_row, width=36, height=36,
+                       bg=BG_SIDEBAR, highlightthickness=0)
+        av.pack(side=tk.LEFT)
+        av.create_oval(2, 2, 34, 34, fill=ACCENT, outline="")
+        av.create_text(18, 18, text=initials, fill=TEXT_LIGHT,
+                       font=(FONT, 9, "bold"))
+
+        ui = tk.Frame(user_row, bg=BG_SIDEBAR)
+        ui.pack(side=tk.LEFT, padx=(10, 0))
+        display = email if email else "Gebruiker"
+        tk.Label(ui, text=display, bg=BG_SIDEBAR, fg=TEXT_DARK,
+                 font=(FONT, 9, "bold"), anchor="w",
+                 wraplength=130).pack(anchor="w")
+        tk.Button(ui, text="Uitloggen", command=self._do_logout,
+                  bg=BG_SIDEBAR, fg=TEXT_MUTED,
+                  activebackground=BORDER, activeforeground=TEXT_DARK,
+                  font=(FONT, 7, "underline"), bd=0, relief=tk.FLAT,
+                  cursor="hand2", anchor="w", padx=0
+                  ).pack(anchor="w")
+
+        # ── Versie ───────────────────────────────────────────────────────────
         tk.Frame(sb, bg=BORDER, height=1).pack(fill=tk.X, padx=16)
         tk.Label(sb, text=f"{VERSION}  •  Excellent App",
                  bg=BG_SIDEBAR, fg=TEXT_MUTED,
