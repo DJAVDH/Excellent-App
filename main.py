@@ -1177,24 +1177,24 @@ def _check_for_update(root: tk.Tk):
 
 
 def _show_update_popup(root: tk.Tk, latest: str, asset_url: str):
-    dlg = tk.Toplevel(root)
-    dlg.title("Update beschikbaar")
-    dlg.configure(bg="#FFFFFF")
-    dlg.geometry("400x260")
-    dlg.resizable(False, False)
-    dlg.transient(root)
-    dlg.grab_set()
-    dlg.eval("tk::PlaceWindow . center")
-    dlg.protocol("WM_DELETE_WINDOW", lambda: None)  # X knop uitschakelen
+    # Donker overlay over het hele venster
+    overlay = tk.Frame(root, bg="#000000")
+    overlay.place(relx=0, rely=0, relwidth=1, relheight=1)
+    overlay.configure(cursor="arrow")
+
+    # Popup kaart gecentreerd
+    card = tk.Frame(overlay, bg="#FFFFFF",
+                    highlightbackground="#E8EAF0", highlightthickness=1)
+    card.place(relx=0.5, rely=0.5, anchor="center", width=400, height=270)
 
     # Header
-    header = tk.Frame(dlg, bg=ACCENT, height=56)
+    header = tk.Frame(card, bg=ACCENT, height=56)
     header.pack(fill=tk.X)
     header.pack_propagate(False)
     tk.Label(header, text="Update beschikbaar",
              bg=ACCENT, fg="#FFFFFF", font=(FONT, 13, "bold")).pack(expand=True)
 
-    body = tk.Frame(dlg, bg="#FFFFFF", padx=28, pady=20)
+    body = tk.Frame(card, bg="#FFFFFF", padx=28, pady=20)
     body.pack(fill=tk.BOTH, expand=True)
 
     tk.Label(body, text="Er is een nieuwe versie van Excellent App.",
@@ -1218,13 +1218,10 @@ def _show_update_popup(root: tk.Tk, latest: str, asset_url: str):
     tk.Label(body, textvariable=status_var, bg="#FFFFFF", fg="#8A8FA8",
              font=(FONT, 8)).pack(anchor="w", pady=(10, 0))
 
-    btn_row = tk.Frame(body, bg="#FFFFFF")
-    btn_row.pack(fill=tk.X, pady=(8, 0))
-
     def _do_update():
         update_btn.config(text="Downloaden...", state=tk.DISABLED)
         status_var.set("Bezig met downloaden, even geduld...")
-        dlg.update()
+        overlay.update()
 
         def _download():
             try:
@@ -1233,7 +1230,7 @@ def _show_update_popup(root: tk.Tk, latest: str, asset_url: str):
                 urllib.request.urlretrieve(asset_url, tmp)
                 current_exe = sys.executable if getattr(sys, "frozen", False) else None
                 if not current_exe:
-                    root.after(0, lambda: status_var.set("Automatisch updaten werkt alleen als .exe"))
+                    root.after(0, lambda: status_var.set("Werkt alleen als .exe"))
                     return
                 bat = os.path.join(tempfile.gettempdir(), "excellent_update.bat")
                 with open(bat, "w") as f:
@@ -1256,12 +1253,12 @@ def _show_update_popup(root: tk.Tk, latest: str, asset_url: str):
                 root.after(0, lambda: status_var.set(f"Fout: {e}"))
         threading.Thread(target=_download, daemon=True).start()
 
-    update_btn = tk.Button(btn_row, text="Update uitvoeren", command=_do_update,
+    update_btn = tk.Button(body, text="Update uitvoeren", command=_do_update,
                            bg=ACCENT, fg="#FFFFFF",
                            activebackground="#2E2E4E", activeforeground="#FFFFFF",
                            font=(FONT, 9, "bold"), bd=0, relief=tk.FLAT,
-                           padx=16, pady=8, cursor="hand2")
-    update_btn.pack(fill=tk.X)
+                           pady=10, cursor="hand2")
+    update_btn.pack(fill=tk.X, pady=(8, 0))
 
 
 def _launch_app():
