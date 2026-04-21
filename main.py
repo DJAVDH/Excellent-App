@@ -1139,7 +1139,7 @@ class ExcellentApp:
 
 
 def _check_for_update(root: tk.Tk):
-    """Controleer op de achtergrond op updates en pas automatisch toe."""
+    """Controleer op de achtergrond op updates en toon popup bij nieuwe versie."""
     def _worker():
         try:
             url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
@@ -1154,33 +1154,98 @@ def _check_for_update(root: tk.Tk):
                  if a["name"].endswith(".exe")), None)
             if not asset_url:
                 return
-            import tempfile
-            tmp = os.path.join(tempfile.gettempdir(), "ExcellentApp_update.exe")
-            urllib.request.urlretrieve(asset_url, tmp)
-            current_exe = sys.executable if getattr(sys, "frozen", False) else None
-            if not current_exe:
-                return
-            bat = os.path.join(tempfile.gettempdir(), "excellent_update.bat")
-            with open(bat, "w") as f:
-                f.write(
-                    "@echo off\n"
-                    "timeout /t 6 /nobreak > nul\n"
-                    f'taskkill /f /im "Excellent App.exe" > nul 2>&1\n'
-                    "timeout /t 3 /nobreak > nul\n"
-                    f'copy /Y "{tmp}" "{current_exe}"\n'
-                    "timeout /t 5 /nobreak > nul\n"
-                    f'start "" "{current_exe}"\n'
-                    "del \"%~f0\"\n"
-                )
-            def _apply():
-                import subprocess
-                subprocess.Popen(["cmd", "/c", bat],
-                                 creationflags=subprocess.CREATE_NO_WINDOW)
-                root.destroy()
-            root.after(0, _apply)
+            root.after(0, lambda: _show_update_popup(root, latest, asset_url))
         except Exception:
             pass
     threading.Thread(target=_worker, daemon=True).start()
+
+
+def _show_update_popup(root: tk.Tk, latest: str, asset_url: str):
+    dlg = tk.Toplevel(root)
+    dlg.title("Update beschikbaar")
+    dlg.configure(bg="#FFFFFF")
+    dlg.geometry("400x260")
+    dlg.resizable(False, False)
+    dlg.transient(root)
+    dlg.grab_set()
+    dlg.eval("tk::PlaceWindow . center")
+    dlg.protocol("WM_DELETE_WINDOW", lambda: None)  # X knop uitschakelen
+
+    # Header
+    header = tk.Frame(dlg, bg=ACCENT, height=56)
+    header.pack(fill=tk.X)
+    header.pack_propagate(False)
+    tk.Label(header, text="Update beschikbaar",
+             bg=ACCENT, fg="#FFFFFF", font=(FONT, 13, "bold")).pack(expand=True)
+
+    body = tk.Frame(dlg, bg="#FFFFFF", padx=28, pady=20)
+    body.pack(fill=tk.BOTH, expand=True)
+
+    tk.Label(body, text="Er is een nieuwe versie van Excellent App.",
+             bg="#FFFFFF", fg="#1A1A2E", font=(FONT, 10)).pack(anchor="w")
+
+    ver_row = tk.Frame(body, bg="#FFFFFF")
+    ver_row.pack(anchor="w", pady=(12, 0))
+    tk.Label(ver_row, text="Huidige versie:", bg="#FFFFFF", fg="#8A8FA8",
+             font=(FONT, 9)).pack(side=tk.LEFT)
+    tk.Label(ver_row, text=f"  {VERSION}", bg="#FFFFFF", fg="#1A1A2E",
+             font=(FONT, 9, "bold")).pack(side=tk.LEFT)
+
+    ver_row2 = tk.Frame(body, bg="#FFFFFF")
+    ver_row2.pack(anchor="w", pady=(4, 0))
+    tk.Label(ver_row2, text="Nieuwe versie:  ", bg="#FFFFFF", fg="#8A8FA8",
+             font=(FONT, 9)).pack(side=tk.LEFT)
+    tk.Label(ver_row2, text=f"{latest}", bg="#FFFFFF", fg="#4CAF50",
+             font=(FONT, 9, "bold")).pack(side=tk.LEFT)
+
+    status_var = tk.StringVar()
+    tk.Label(body, textvariable=status_var, bg="#FFFFFF", fg="#8A8FA8",
+             font=(FONT, 8)).pack(anchor="w", pady=(10, 0))
+
+    btn_row = tk.Frame(body, bg="#FFFFFF")
+    btn_row.pack(fill=tk.X, pady=(8, 0))
+
+    def _do_update():
+        update_btn.config(text="Downloaden...", state=tk.DISABLED)
+        status_var.set("Bezig met downloaden, even geduld...")
+        dlg.update()
+
+        def _download():
+            try:
+                import tempfile, subprocess
+                tmp = os.path.join(tempfile.gettempdir(), "ExcellentApp_update.exe")
+                urllib.request.urlretrieve(asset_url, tmp)
+                current_exe = sys.executable if getattr(sys, "frozen", False) else None
+                if not current_exe:
+                    root.after(0, lambda: status_var.set("Automatisch updaten werkt alleen als .exe"))
+                    return
+                bat = os.path.join(tempfile.gettempdir(), "excellent_update.bat")
+                with open(bat, "w") as f:
+                    f.write(
+                        "@echo off\n"
+                        "timeout /t 6 /nobreak > nul\n"
+                        f'taskkill /f /im "Excellent App.exe" > nul 2>&1\n'
+                        "timeout /t 3 /nobreak > nul\n"
+                        f'copy /Y "{tmp}" "{current_exe}"\n'
+                        "timeout /t 5 /nobreak > nul\n"
+                        f'start "" "{current_exe}"\n'
+                        "del \"%~f0\"\n"
+                    )
+                def _apply():
+                    subprocess.Popen(["cmd", "/c", bat],
+                                     creationflags=subprocess.CREATE_NO_WINDOW)
+                    root.destroy()
+                root.after(0, _apply)
+            except Exception as e:
+                root.after(0, lambda: status_var.set(f"Fout: {e}"))
+        threading.Thread(target=_download, daemon=True).start()
+
+    update_btn = tk.Button(btn_row, text="Update uitvoeren", command=_do_update,
+                           bg=ACCENT, fg="#FFFFFF",
+                           activebackground="#2E2E4E", activeforeground="#FFFFFF",
+                           font=(FONT, 9, "bold"), bd=0, relief=tk.FLAT,
+                           padx=16, pady=8, cursor="hand2")
+    update_btn.pack(fill=tk.X)
 
 
 def _launch_app():
