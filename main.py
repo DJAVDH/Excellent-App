@@ -1165,8 +1165,10 @@ def _check_for_update(root: tk.Tk):
                 f.write(
                     "@echo off\n"
                     "timeout /t 6 /nobreak > nul\n"
+                    f'taskkill /f /im "Excellent App.exe" > nul 2>&1\n'
+                    "timeout /t 3 /nobreak > nul\n"
                     f'copy /Y "{tmp}" "{current_exe}"\n'
-                    "timeout /t 2 /nobreak > nul\n"
+                    "timeout /t 5 /nobreak > nul\n"
                     f'start "" "{current_exe}"\n'
                     "del \"%~f0\"\n"
                 )
