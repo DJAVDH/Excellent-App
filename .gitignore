@@ -1,8 +1,11 @@
 supabase_client.py
 app_stats.json
 session.json
+version.py
 __pycache__/
 build/
 dist/
-*.spec
+labelMaker.spec
+labelMaker_debug.spec
+printer-ladevinden.spec
 *.pyc

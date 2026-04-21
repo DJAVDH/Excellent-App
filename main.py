@@ -4,7 +4,16 @@ from tkinter import ttk, messagebox
 import os
 import sys
 import json
+import threading
+import urllib.request
 from datetime import datetime
+
+try:
+    from version import VERSION
+except ImportError:
+    VERSION = "dev"
+
+GITHUB_REPO = "DJAVDH/Excellent-App"
 
 try:
     from PIL import Image, ImageTk
@@ -1130,10 +1139,40 @@ class ExcellentApp:
         self.assistentie_bon = AssistentieBonComponent(form_card, self)
 
 
+def _check_for_update(root: tk.Tk):
+    """Controleer op de achtergrond of er een nieuwere versie beschikbaar is."""
+    def _worker():
+        try:
+            url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+            req = urllib.request.Request(url, headers={"User-Agent": "Excellent-App"})
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read())
+            latest = data.get("tag_name", "")
+            if latest and latest != VERSION and VERSION != "dev":
+                asset_url = ""
+                for asset in data.get("assets", []):
+                    if asset["name"].endswith(".exe"):
+                        asset_url = asset["browser_download_url"]
+                        break
+                def _prompt():
+                    msg = (f"Nieuwe versie beschikbaar: {latest}\n"
+                           f"Huidige versie: {VERSION}\n\n"
+                           f"Wil je de update downloaden?")
+                    if messagebox.askyesno("Update beschikbaar", msg):
+                        import webbrowser
+                        webbrowser.open(asset_url or
+                                        f"https://github.com/{GITHUB_REPO}/releases/latest")
+                root.after(0, _prompt)
+        except Exception:
+            pass
+    threading.Thread(target=_worker, daemon=True).start()
+
+
 def _launch_app():
     sc.check_admin_role()
     main_root = tk.Tk()
     ExcellentApp(main_root)
+    _check_for_update(main_root)
     main_root.mainloop()
 
 

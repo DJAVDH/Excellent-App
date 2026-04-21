@@ -1,0 +1,58 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: pip install pyinstaller supabase pillow reportlab pymupdf pywin32 ttkbootstrap
+
+      - name: Create supabase_client.py from secrets
+        shell: python
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          import os
+          template = open('supabase_client.py.template', encoding='utf-8').read()
+          result = (template
+              .replace('__SUPABASE_URL__', os.environ['SUPABASE_URL'])
+              .replace('__SUPABASE_KEY__', os.environ['SUPABASE_KEY'])
+              .replace('__SUPABASE_SERVICE_KEY__', os.environ['SUPABASE_SERVICE_KEY']))
+          open('supabase_client.py', 'w', encoding='utf-8').write(result)
+
+      - name: Write version
+        shell: python
+        env:
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          import os
+          open('version.py', 'w').write(f"VERSION = 'v1.{os.environ['RUN_NUMBER']}'\n")
+
+      - name: Build exe
+        run: pyinstaller main.spec
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.${{ github.run_number }}
+          name: "Excellent App v1.${{ github.run_number }}"
+          body: "Automatische build van commit ${{ github.sha }}"
+          files: dist/Excellent App.exe

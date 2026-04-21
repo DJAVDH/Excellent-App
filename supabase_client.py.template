@@ -1,0 +1,175 @@
+import os
+import json
+from supabase import create_client, Client
+
+SUPABASE_URL         = "__SUPABASE_URL__"
+SUPABASE_KEY         = "__SUPABASE_KEY__"
+SUPABASE_SERVICE_KEY = "__SUPABASE_SERVICE_KEY__"
+
+_SESSION_FILE = os.path.join(os.path.abspath(os.path.dirname(__file__)), "session.json")
+
+_client: Client | None = None
+_admin_client: Client | None = None
+_user_email: str = ""
+_is_admin: bool = False
+
+
+def get_client() -> Client:
+    global _client
+    if _client is None:
+        _client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    return _client
+
+
+def get_admin_client() -> Client:
+    """Client met service_role key — alleen gebruiken voor admin functies."""
+    global _admin_client
+    if _admin_client is None:
+        _admin_client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+    return _admin_client
+
+
+# ── Gebruikersbeheer (vereist admin client) ──────────────────────────────────
+
+def admin_list_users() -> list:
+    """Haal alle auth-gebruikers op."""
+    try:
+        result = get_admin_client().auth.admin.list_users()
+        return result or []
+    except Exception:
+        return []
+
+
+def admin_create_user(email: str, password: str) -> str:
+    """Maak een nieuw account aan. Geeft de user_id terug."""
+    result = get_admin_client().auth.admin.create_user({
+        "email": email,
+        "password": password,
+        "email_confirm": True,
+    })
+    return result.user.id
+
+
+def admin_delete_user(user_id: str):
+    """Verwijder een account permanent."""
+    get_admin_client().auth.admin.delete_user(user_id)
+
+
+def admin_set_admin_role(email: str, is_admin_val: bool):
+    """Zet of verwijder admin-rol voor een gebruiker."""
+    get_admin_client().table("user_roles").upsert({
+        "user_email": email,
+        "is_admin": is_admin_val,
+    }).execute()
+
+
+def login(email: str, password: str):
+    """Inloggen en sessie opslaan."""
+    global _user_email
+    sb = get_client()
+    result = sb.auth.sign_in_with_password({"email": email, "password": password})
+    _user_email = email
+    _save_session(result.session)
+    return result
+
+
+def logout():
+    global _user_email, _is_admin
+    try:
+        get_client().auth.sign_out()
+    except Exception:
+        pass
+    _user_email = ""
+    _is_admin = False
+    _clear_session()
+
+
+def check_admin_role() -> bool:
+    """Controleer of de huidige gebruiker admin is en sla op in geheugen."""
+    global _is_admin
+    try:
+        res = get_client().table("user_roles") \
+            .select("is_admin").eq("user_email", _user_email).execute()
+        _is_admin = bool(res.data and res.data[0].get("is_admin", False))
+    except Exception:
+        _is_admin = False
+    return _is_admin
+
+
+def is_admin() -> bool:
+    return _is_admin
+
+
+def restore_session() -> bool:
+    """Herstel opgeslagen sessie. Geeft True terug als succesvol."""
+    global _user_email
+    try:
+        if not os.path.exists(_SESSION_FILE):
+            return False
+        with open(_SESSION_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        access_token  = data.get("access_token", "")
+        refresh_token = data.get("refresh_token", "")
+        if not access_token or not refresh_token:
+            return False
+        sb = get_client()
+        session = sb.auth.set_session(access_token, refresh_token)
+        if session and session.user:
+            _user_email = session.user.email or data.get("email", "")
+            _save_session(session.session)
+            return True
+    except Exception:
+        pass
+    _clear_session()
+    return False
+
+
+def reset_password(email: str):
+    """Stuur wachtwoord-reset e-mail."""
+    get_client().auth.reset_password_for_email(email)
+
+
+def log_activity(action_type: str, aantal: int = 1):
+    """Schrijf een activiteit naar de activity_log tabel."""
+    try:
+        get_client().table("activity_log").insert({
+            "user_email": _user_email,
+            "action_type": action_type,
+            "aantal": aantal,
+        }).execute()
+    except Exception:
+        pass
+
+
+def get_user_email() -> str:
+    return _user_email
+
+
+def is_logged_in() -> bool:
+    try:
+        session = get_client().auth.get_session()
+        return session is not None and session.user is not None
+    except Exception:
+        return False
+
+
+def _save_session(session):
+    try:
+        if session is None:
+            return
+        with open(_SESSION_FILE, "w", encoding="utf-8") as f:
+            json.dump({
+                "access_token":  session.access_token,
+                "refresh_token": session.refresh_token,
+                "email":         _user_email,
+            }, f)
+    except Exception:
+        pass
+
+
+def _clear_session():
+    try:
+        if os.path.exists(_SESSION_FILE):
+            os.remove(_SESSION_FILE)
+    except Exception:
+        pass
