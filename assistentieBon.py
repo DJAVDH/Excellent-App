@@ -301,7 +301,20 @@ class AssistentieBonComponent:
         info_row("Datum:", datum, "Betreft:", betreft)
         info_row("Wagen:", wagen, "Tijd:", tijd)
         info_row("Contactpersoon:", contactpersoon)
-        info_row("Werkzaamheden:", werkzaamheden)
+
+        # Werkzaamheden met tekst-wrapping
+        max_w = W - 2 * M - label_w
+        c.setFont("Helvetica-Bold", 9)
+        c.setFillColor(colors.HexColor("#8A8FA8"))
+        c.drawString(M, y, "Werkzaamheden:")
+        c.setFont("Helvetica", 10)
+        c.setFillColor(colors.HexColor("#1A1A2E"))
+        from reportlab.lib.utils import simpleSplit
+        lines = simpleSplit(werkzaamheden, "Helvetica", 10, max_w)
+        for i, line in enumerate(lines):
+            c.drawString(M + label_w, y - i * 5 * mm, line)
+        y -= max(1, len(lines)) * 5 * mm + 2 * mm
+
         info_row("Adres:", adres)
         y -= 4 * mm
 
@@ -336,8 +349,9 @@ class AssistentieBonComponent:
             ('ALIGN',         (0, 1), (-1, -1), 'LEFT'),
             ('VALIGN',        (0, 1), (-1, -1), 'MIDDLE'),
             ('ROWBACKGROUNDS',(0, 1), (-1, -1), [colors.white, colors.HexColor("#F7F9FC")]),
-            ('GRID',          (0, 0), (-1, -1), 0.5, colors.HexColor("#E8EAF0")),
-            ('BOX',           (0, 0), (-1, -1), 1,   colors.HexColor("#1A1A2E")),
+            ('INNERGRID',     (0, 0), (-1, -1), 0.5, colors.HexColor("#B0B5C8")),
+            ('BOX',           (0, 0), (-1, -1), 1.5, colors.HexColor("#1A1A2E")),
+            ('LINEBELOW',     (0, 0), (-1, 0),  1.5, colors.HexColor("#1A1A2E")),
             ('LEFTPADDING',   (0, 0), (-1, -1), 4),
             ('RIGHTPADDING',  (0, 0), (-1, -1), 4),
             ('TOPPADDING',    (0, 0), (-1, -1), 3),
@@ -533,9 +547,10 @@ class AssistentieBonComponent:
 
         sel = self.tray_var.get()
         tray_code = self._tray_map.get(sel, 1)
-        ok = self.print_via_gdi(printer_name, images, tray_code)
-        if ok:
-            messagebox.showinfo("Succes", f"Assistentie bon verstuurd naar {printer_name} ({sel}).")
+        ok1 = self.print_via_gdi(printer_name, images, tray_code)
+        ok2 = self.print_via_gdi(printer_name, images, tray_code)
+        if ok1 and ok2:
+            messagebox.showinfo("Succes", f"Assistentie bon (2x) verstuurd naar {printer_name} ({sel}).")
             try:
                 if hasattr(self.app, 'increment_bons'):
                     self.app.increment_bons()
