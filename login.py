@@ -90,12 +90,19 @@ class LoginWindow:
                               highlightthickness=1, font=(FONT, 10))
         pass_entry.pack(fill=tk.X, ipady=6)
 
+        # Onthoud mij checkbox
+        self.remember_var = tk.BooleanVar(value=True)
+        tk.Checkbutton(form, text="Onthoud mij", variable=self.remember_var,
+                       bg=BG, fg=TEXT, activebackground=BG,
+                       font=(FONT, 9), anchor="w",
+                       selectcolor=BG).pack(fill=tk.X, pady=(10, 0))
+
         # Foutmelding
         self.error_var = tk.StringVar()
         self.error_lbl = tk.Label(form, textvariable=self.error_var,
                                   bg=BG, fg=ERROR, font=(FONT, 8),
                                   anchor="w", wraplength=296)
-        self.error_lbl.pack(fill=tk.X, pady=(8, 0))
+        self.error_lbl.pack(fill=tk.X, pady=(4, 0))
 
         # Login knop
         self.btn = tk.Button(form, text="Inloggen", command=self._do_login,
@@ -157,7 +164,7 @@ class LoginWindow:
         self.root.update()
 
         try:
-            sc.login(email, password)
+            sc.login(email, password, remember=self.remember_var.get())
             self.on_success(email)
         except Exception as e:
             msg = str(e)

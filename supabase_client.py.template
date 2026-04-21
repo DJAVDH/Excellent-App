@@ -65,13 +65,16 @@ def admin_set_admin_role(email: str, is_admin_val: bool):
     }).execute()
 
 
-def login(email: str, password: str):
-    """Inloggen en sessie opslaan."""
+def login(email: str, password: str, remember: bool = True):
+    """Inloggen en optioneel sessie opslaan."""
     global _user_email
     sb = get_client()
     result = sb.auth.sign_in_with_password({"email": email, "password": password})
     _user_email = email
-    _save_session(result.session)
+    if remember:
+        _save_session(result.session)
+    else:
+        _clear_session()
     return result
 
 
@@ -115,10 +118,10 @@ def restore_session() -> bool:
         if not access_token or not refresh_token:
             return False
         sb = get_client()
-        session = sb.auth.set_session(access_token, refresh_token)
-        if session and session.user:
-            _user_email = session.user.email or data.get("email", "")
-            _save_session(session.session)
+        result = sb.auth.refresh_session(refresh_token)
+        if result and result.user:
+            _user_email = result.user.email or data.get("email", "")
+            _save_session(result.session)
             return True
     except Exception:
         pass
