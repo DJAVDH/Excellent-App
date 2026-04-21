@@ -1140,7 +1140,7 @@ class ExcellentApp:
 
 
 def _check_for_update(root: tk.Tk):
-    """Controleer op de achtergrond of er een nieuwere versie beschikbaar is."""
+    """Controleer op de achtergrond op updates en pas automatisch toe."""
     def _worker():
         try:
             url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
@@ -1148,21 +1148,34 @@ def _check_for_update(root: tk.Tk):
             with urllib.request.urlopen(req, timeout=5) as resp:
                 data = json.loads(resp.read())
             latest = data.get("tag_name", "")
-            if latest and latest != VERSION and VERSION != "dev":
-                asset_url = ""
-                for asset in data.get("assets", []):
-                    if asset["name"].endswith(".exe"):
-                        asset_url = asset["browser_download_url"]
-                        break
-                def _prompt():
-                    msg = (f"Nieuwe versie beschikbaar: {latest}\n"
-                           f"Huidige versie: {VERSION}\n\n"
-                           f"Wil je de update downloaden?")
-                    if messagebox.askyesno("Update beschikbaar", msg):
-                        import webbrowser
-                        webbrowser.open(asset_url or
-                                        f"https://github.com/{GITHUB_REPO}/releases/latest")
-                root.after(0, _prompt)
+            if not latest or latest == VERSION or VERSION == "dev":
+                return
+            asset_url = next(
+                (a["browser_download_url"] for a in data.get("assets", [])
+                 if a["name"].endswith(".exe")), None)
+            if not asset_url:
+                return
+            import tempfile
+            tmp = os.path.join(tempfile.gettempdir(), "ExcellentApp_update.exe")
+            urllib.request.urlretrieve(asset_url, tmp)
+            current_exe = sys.executable if getattr(sys, "frozen", False) else None
+            if not current_exe:
+                return
+            bat = os.path.join(tempfile.gettempdir(), "excellent_update.bat")
+            with open(bat, "w") as f:
+                f.write(
+                    "@echo off\n"
+                    "ping 127.0.0.1 -n 3 > nul\n"
+                    f'copy /Y "{tmp}" "{current_exe}"\n'
+                    f'start "" "{current_exe}"\n'
+                    "del \"%~f0\"\n"
+                )
+            def _apply():
+                import subprocess
+                subprocess.Popen(["cmd", "/c", bat],
+                                 creationflags=subprocess.CREATE_NO_WINDOW)
+                root.destroy()
+            root.after(0, _apply)
         except Exception:
             pass
     threading.Thread(target=_worker, daemon=True).start()
