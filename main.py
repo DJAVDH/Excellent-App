@@ -24,6 +24,7 @@ except ImportError:
 import supabase_client as sc
 from labelMaker import LabelMakerComponent
 from assistentieBon import AssistentieBonComponent
+from kastBon import KastBonComponent
 from login import LoginWindow
 
 # ── Colour palette ───────────────────────────────────────────────────────────
@@ -48,6 +49,7 @@ FONT         = "Segoe UI"
 ICON_DASHBOARD   = "⊞"
 ICON_LABEL       = "🏷"
 ICON_ASSISTENTIE = "📋"
+ICON_KAST        = "📦"
 
 # ── Kaart-helper ─────────────────────────────────────────────────────────────
 def make_card(parent, bg=BG_CARD, accent_color=None, padx=16, pady=14):
@@ -188,6 +190,7 @@ class ExcellentApp:
         self._make_nav_btn(ICON_DASHBOARD,   "Dashboard",       self._go_dashboard)
         self._make_nav_btn(ICON_LABEL,       "Label Maker",     self.show_label_maker)
         self._make_nav_btn(ICON_ASSISTENTIE, "Assistentie Bon", self.show_assistentie_bon)
+        self._make_nav_btn(ICON_KAST,        "123kast Bon",     self.show_kast_bon)
         if sc.is_admin():
             self._make_nav_btn("⚙", "Admin", self.show_admin_page)
 
@@ -418,11 +421,12 @@ class ExcellentApp:
 
         inner.bind("<Configure>",
                    lambda e: cv.configure(scrollregion=cv.bbox("all")))
-        cv.create_window((0, 0), window=inner, anchor="nw")
+        win_id = cv.create_window((0, 0), window=inner, anchor="nw")
         cv.configure(yscrollcommand=sb.set)
 
         cv.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         sb.pack(side=tk.RIGHT, fill=tk.Y)
+        cv.bind("<Configure>", lambda e: cv.itemconfig(win_id, width=e.width))
 
         def _scroll(e):
             cv.yview_scroll(int(-1 * (e.delta / 120)), "units")
@@ -759,6 +763,10 @@ class ExcellentApp:
     # ════════════════════════════════════════════════════════════════════════
 
     def show_admin_page(self):
+        if not sc.check_admin_role():
+            messagebox.showerror("Geen toegang", "Je hebt geen beheerdersrechten.")
+            self._go_dashboard()
+            return
         self.page_title_var.set("Admin")
         self._clear_content()
         page = self._scrollable()
@@ -1003,10 +1011,14 @@ class ExcellentApp:
                  font=(FONT, 8), anchor="w", wraplength=330).pack(fill=tk.X, pady=(6, 0))
 
         def _do_create():
+            import re
             email = email_var.get().strip()
             password = pass_var.get()
             if not email or not password:
                 err_var.set("Vul e-mailadres en wachtwoord in.")
+                return
+            if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
+                err_var.set("Ongeldig e-mailadres.")
                 return
             try:
                 sc.admin_create_user(email, password)
@@ -1030,6 +1042,9 @@ class ExcellentApp:
             messagebox.showerror("Fout", str(e))
 
     def _admin_delete_user(self, user_id, email):
+        if not sc.check_admin_role():
+            messagebox.showerror("Geen toegang", "Je hebt geen beheerdersrechten.")
+            return
         if not messagebox.askyesno(
             "Gebruiker verwijderen",
             f"Weet je zeker dat je '{email}' wilt verwijderen?\nDit kan niet ongedaan worden gemaakt.",
@@ -1057,6 +1072,9 @@ class ExcellentApp:
             messagebox.showerror("Fout", str(e))
 
     def _admin_export_csv(self, rows):
+        if not sc.check_admin_role():
+            messagebox.showerror("Geen toegang", "Je hebt geen beheerdersrechten.")
+            return
         import csv
         from tkinter import filedialog
         path = filedialog.asksaveasfilename(
@@ -1076,6 +1094,9 @@ class ExcellentApp:
             messagebox.showerror("Fout", str(e))
 
     def _admin_reset_stats(self):
+        if not sc.check_admin_role():
+            messagebox.showerror("Geen toegang", "Je hebt geen beheerdersrechten.")
+            return
         if not messagebox.askyesno("Reset statistieken",
                                    "Weet je zeker dat je alle statistieken wilt resetten?\n"
                                    "Dit verwijdert ook de volledige activiteiten log.",
@@ -1113,17 +1134,18 @@ class ExcellentApp:
         page = tk.Frame(cv, bg=BG_ROOT)
         page.bind("<Configure>",
                   lambda e: cv.configure(scrollregion=cv.bbox("all")))
-        cv.create_window((0, 0), window=page, anchor="nw")
+        lm_win_id = cv.create_window((0, 0), window=page, anchor="nw")
         cv.configure(yscrollcommand=sb.set)
         cv.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         sb.pack(side=tk.RIGHT, fill=tk.Y)
+        cv.bind("<Configure>", lambda e: cv.itemconfig(lm_win_id, width=e.width))
         cv.bind_all("<MouseWheel>",
                     lambda e: cv.yview_scroll(int(-1*(e.delta/120)), "units"))
 
         # Kaart-wrapper voor het formulier
         form_card = tk.Frame(page, bg=BG_CARD,
                              highlightbackground=BORDER, highlightthickness=1)
-        form_card.pack(fill=tk.BOTH, expand=True, pady=(0, 16))
+        form_card.pack(fill=tk.X, pady=(0, 16))
         tk.Frame(form_card, bg=GREEN, height=4).pack(fill=tk.X)
 
         self.label_maker = LabelMakerComponent(form_card, self)
@@ -1139,19 +1161,46 @@ class ExcellentApp:
         page = tk.Frame(cv, bg=BG_ROOT)
         page.bind("<Configure>",
                   lambda e: cv.configure(scrollregion=cv.bbox("all")))
-        cv.create_window((0, 0), window=page, anchor="nw")
+        ab_win_id = cv.create_window((0, 0), window=page, anchor="nw")
         cv.configure(yscrollcommand=sb.set)
         cv.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         sb.pack(side=tk.RIGHT, fill=tk.Y)
+        cv.bind("<Configure>", lambda e: cv.itemconfig(ab_win_id, width=e.width))
         cv.bind_all("<MouseWheel>",
                     lambda e: cv.yview_scroll(int(-1*(e.delta/120)), "units"))
 
         form_card = tk.Frame(page, bg=BG_CARD,
                              highlightbackground=BORDER, highlightthickness=1)
-        form_card.pack(fill=tk.BOTH, expand=True, pady=(0, 16))
+        form_card.pack(fill=tk.X, pady=(0, 16))
         tk.Frame(form_card, bg=BLUE, height=4).pack(fill=tk.X)
 
         self.assistentie_bon = AssistentieBonComponent(form_card, self)
+
+    def show_kast_bon(self):
+        self.page_title_var.set("123kast Bon")
+        self._clear_content()
+        wrap = tk.Frame(self.content_frame, bg=BG_ROOT)
+        wrap.pack(fill=tk.BOTH, expand=True)
+
+        cv = tk.Canvas(wrap, bg=BG_ROOT, highlightthickness=0)
+        sb = ttk.Scrollbar(wrap, orient="vertical", command=cv.yview)
+        page = tk.Frame(cv, bg=BG_ROOT)
+        page.bind("<Configure>",
+                  lambda e: cv.configure(scrollregion=cv.bbox("all")))
+        kb_win_id = cv.create_window((0, 0), window=page, anchor="nw")
+        cv.configure(yscrollcommand=sb.set)
+        cv.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        sb.pack(side=tk.RIGHT, fill=tk.Y)
+        cv.bind("<Configure>", lambda e: cv.itemconfig(kb_win_id, width=e.width))
+        cv.bind_all("<MouseWheel>",
+                    lambda e: cv.yview_scroll(int(-1 * (e.delta / 120)), "units"))
+
+        form_card = tk.Frame(page, bg=BG_CARD,
+                             highlightbackground=BORDER, highlightthickness=1)
+        form_card.pack(fill=tk.X, pady=(0, 16))
+        tk.Frame(form_card, bg="#FF6B35", height=4).pack(fill=tk.X)
+
+        self.kast_bon = KastBonComponent(form_card, self)
 
 
 def _check_for_update(root: tk.Tk):
@@ -1165,18 +1214,22 @@ def _check_for_update(root: tk.Tk):
             latest = data.get("tag_name", "")
             if not latest or latest == VERSION or VERSION == "dev":
                 return
+            assets = data.get("assets", [])
             asset_url = next(
-                (a["browser_download_url"] for a in data.get("assets", [])
+                (a["browser_download_url"] for a in assets
                  if a["name"].endswith(".exe")), None)
             if not asset_url:
                 return
-            root.after(0, lambda: _show_update_popup(root, latest, asset_url))
+            sha256_url = next(
+                (a["browser_download_url"] for a in assets
+                 if a["name"].endswith(".sha256")), None)
+            root.after(0, lambda: _show_update_popup(root, latest, asset_url, sha256_url))
         except Exception:
             pass
     threading.Thread(target=_worker, daemon=True).start()
 
 
-def _show_update_popup(root: tk.Tk, latest: str, asset_url: str):
+def _show_update_popup(root: tk.Tk, latest: str, asset_url: str, sha256_url: str | None = None):
     # Donker overlay over het hele venster
     overlay = tk.Frame(root, bg="#000000")
     overlay.place(relx=0, rely=0, relwidth=1, relheight=1)
@@ -1225,9 +1278,23 @@ def _show_update_popup(root: tk.Tk, latest: str, asset_url: str):
 
         def _download():
             try:
-                import tempfile, subprocess
+                import tempfile, subprocess, hashlib
                 tmp = os.path.join(tempfile.gettempdir(), "ExcellentApp_update.exe")
                 urllib.request.urlretrieve(asset_url, tmp)
+                if sha256_url:
+                    try:
+                        with urllib.request.urlopen(sha256_url, timeout=10) as resp:
+                            expected = resp.read().decode().strip().split()[0].lower()
+                        h = hashlib.sha256()
+                        with open(tmp, "rb") as f:
+                            for chunk in iter(lambda: f.read(8192), b""):
+                                h.update(chunk)
+                        if h.hexdigest().lower() != expected:
+                            os.remove(tmp)
+                            root.after(0, lambda: status_var.set("Hash verificatie mislukt! Update geannuleerd."))
+                            return
+                    except Exception:
+                        pass
                 current_exe = sys.executable if getattr(sys, "frozen", False) else None
                 if not current_exe:
                     root.after(0, lambda: status_var.set("Werkt alleen als .exe"))

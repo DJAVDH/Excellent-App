@@ -208,18 +208,22 @@ class LabelMakerComponent:
         to = self.to_entry.get().strip().upper()
         referentie = self.ref_entry.get().strip()
         fm = self.fm_entry.get().strip().upper()
-        
+
         try:
             startnummer = int(self.startnum_entry.get())
             paginas = int(self.pages_entry.get())
         except ValueError:
             messagebox.showerror("Fout", "Startnummer en aantal pagina's moeten een getal zijn.")
             return
-        
+
+        if paginas < 1 or paginas > 500:
+            messagebox.showerror("Fout", "Aantal pagina's moet tussen 1 en 500 zijn.")
+            return
+
         if not achternaam or not to or not referentie or not fm:
             messagebox.showerror("Fout", "Vul alle velden in.")
             return
-        
+
         total_labels = paginas * LABELS_PER_PAGE
         c = canvas.Canvas("labels.pdf", pagesize=A4)
         

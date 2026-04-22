@@ -1,4 +1,5 @@
 supabase_client.py
+.env
 app_stats.json
 session.json
 version.py
