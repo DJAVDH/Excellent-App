@@ -4,11 +4,17 @@ import os
 import subprocess
 import threading
 import tempfile
+import json as _json
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
 from email.utils import formatdate
 from datetime import datetime, timedelta
+
+try:
+    import supabase_client as sc
+except ImportError:
+    sc = None
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas as rl_canvas
 from reportlab.lib.units import mm
@@ -69,6 +75,7 @@ class KastBonComponent:
 
         card = tk.Frame(self.frame, bg=BG, highlightbackground=BORDER, highlightthickness=1)
         card.pack(fill=tk.BOTH, expand=True)
+        self._form_card = card
 
         form = tk.Frame(card, bg=BG)
         form.pack(fill=tk.BOTH, expand=True, padx=20, pady=16)
@@ -214,17 +221,30 @@ class KastBonComponent:
         tk.Frame(card, bg=BORDER, height=1).pack(fill=tk.X)
         btn_bar = tk.Frame(card, bg=BG)
         btn_bar.pack(fill=tk.X, padx=20, pady=14)
-        tk.Button(btn_bar, text="Genereer PDF",    command=self.gen_pdf,      **BTN_STYLE).pack(side=tk.LEFT, padx=(0, 8))
-        tk.Button(btn_bar, text="Direct Printen",  command=self.print_direct, **BTN_STYLE).pack(side=tk.LEFT, padx=(0, 8))
-        tk.Button(btn_bar, text="Mail: Datum",    command=self._send_datum_mail,
-                  bg=ORANGE, fg="#FFFFFF", activebackground="#E55A25",
-                  activeforeground="#FFFFFF", font=(FONT, 10), bd=0,
-                  relief=tk.FLAT, padx=14, pady=7, cursor="hand2").pack(side=tk.LEFT, padx=(0, 8))
-        tk.Button(btn_bar, text="Mail: Tijdvak",  command=self._send_tijdvak_mail,
-                  bg=ORANGE, fg="#FFFFFF", activebackground="#E55A25",
-                  activeforeground="#FFFFFF", font=(FONT, 10), bd=0,
-                  relief=tk.FLAT, padx=14, pady=7, cursor="hand2").pack(side=tk.LEFT, padx=(0, 8))
-        tk.Button(btn_bar, text="Velden Leegmaken",command=self.clear_fields, **BTN_SECONDARY).pack(side=tk.LEFT)
+
+        BTN_ORANGE = dict(bg=ORANGE, fg="#FFFFFF", activebackground="#E55A25",
+                          activeforeground="#FFFFFF", font=(FONT, 10), bd=0,
+                          relief=tk.FLAT, padx=14, pady=7, cursor="hand2")
+
+        # Geschiedenis — altijd als eerste, prominent rechts uitgelijnd
+        tk.Button(btn_bar, text="📋  Geschiedenis", command=self.show_history,
+                  bg="#1A1A2E", fg="#FFFFFF", activebackground="#2E2E4E",
+                  activeforeground="#FFFFFF", font=(FONT, 10, "bold"), bd=0,
+                  relief=tk.FLAT, padx=16, pady=7,
+                  cursor="hand2").pack(side=tk.RIGHT)
+
+        # Secundaire actie
+        tk.Button(btn_bar, text="Leegmaken", command=self.clear_fields,
+                  **BTN_SECONDARY).pack(side=tk.RIGHT, padx=(0, 12))
+
+        # Scheidingslijn
+        tk.Frame(btn_bar, bg=BORDER, width=1).pack(side=tk.RIGHT, fill=tk.Y, padx=12)
+
+        # Primaire acties links
+        tk.Button(btn_bar, text="Genereer PDF",   command=self.gen_pdf,            **BTN_STYLE).pack(side=tk.LEFT, padx=(0, 8))
+        tk.Button(btn_bar, text="Direct Printen", command=self.print_direct,       **BTN_STYLE).pack(side=tk.LEFT, padx=(0, 8))
+        tk.Button(btn_bar, text="Mail: Datum",    command=self._send_datum_mail,   **BTN_ORANGE).pack(side=tk.LEFT, padx=(0, 8))
+        tk.Button(btn_bar, text="Mail: Tijdvak",  command=self._send_tijdvak_mail, **BTN_ORANGE).pack(side=tk.LEFT)
 
     # ── Productenlijst ────────────────────────────────────────────────────────
 
@@ -841,6 +861,163 @@ class KastBonComponent:
         c.drawCentredString(W / 2, 10 * mm,
                             "123kast.nl & Excellent Packing and Moving B.V.  •  Tevredenheidsonderzoek  (3/3)")
 
+    # ── Geschiedenis ─────────────────────────────────────────────────────────
+
+    def _save_to_history(self):
+        if not sc or getattr(self, "_from_history", False):
+            return
+        try:
+            sc.get_client().table("kast_bon_history").insert({
+                "datum":          self.datum_var.get().strip(),
+                "tijdsvak":       self.tijdsvak_var.get().strip(),
+                "soort":          self.soort_var.get().strip(),
+                "klantnaam":      self.klantnaam_var.get().strip(),
+                "ordernummer":    self.ordernummer_var.get().strip(),
+                "straatnaam":     self.straatnaam_var.get().strip(),
+                "postcode":       self.postcode_var.get().strip(),
+                "plaatsnaam":     self.plaatsnaam_var.get().strip(),
+                "telefoon":       self.telefoon_var.get().strip(),
+                "email":          self.email_var.get().strip(),
+                "products":       [list(p) for p in self._products],
+                "bijzonderheden": self.bijzonderheden_text.get("1.0", tk.END).strip(),
+            }).execute()
+        except Exception:
+            pass
+        if self.app:
+            try:
+                self.app.increment_kast_bonnen()
+            except Exception:
+                pass
+
+    def show_history(self):
+        self._form_card.pack_forget()
+
+        hist = tk.Frame(self.frame, bg=BG, highlightbackground=BORDER, highlightthickness=1)
+        hist.pack(fill=tk.BOTH, expand=True)
+        self._hist_frame = hist
+
+        def go_back():
+            hist.destroy()
+            self._form_card.pack(fill=tk.BOTH, expand=True)
+
+        # ── Header ───────────────────────────────────────────────────────────
+        hdr = tk.Frame(hist, bg=BG)
+        hdr.pack(fill=tk.X, padx=20, pady=(14, 0))
+
+        tk.Button(hdr, text="← Terug", command=go_back,
+                  bg=BG_FIELD, fg=TEXT_DARK, activebackground=BORDER,
+                  activeforeground=TEXT_DARK, font=(FONT, 9), bd=0,
+                  relief=tk.FLAT, padx=10, pady=5, cursor="hand2").pack(side=tk.LEFT)
+
+        tk.Label(hdr, text="Geschiedenis", bg=BG, fg=TEXT_DARK,
+                 font=(FONT, 13, "bold")).pack(side=tk.LEFT, padx=16)
+
+        tk.Frame(hist, bg=BORDER, height=1).pack(fill=tk.X, pady=(10, 0))
+
+        # ── Scrollbaar lijst ─────────────────────────────────────────────────
+        cv = tk.Canvas(hist, bg=BG, highlightthickness=0)
+        sb = ttk.Scrollbar(hist, orient="vertical", command=cv.yview)
+        cv.configure(yscrollcommand=sb.set)
+        sb.pack(side=tk.RIGHT, fill=tk.Y)
+        cv.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        inner = tk.Frame(cv, bg=BG)
+        win_id = cv.create_window((0, 0), window=inner, anchor="nw")
+        cv.bind("<Configure>", lambda e: cv.itemconfig(win_id, width=e.width))
+        inner.bind("<Configure>", lambda e: cv.configure(scrollregion=cv.bbox("all")))
+        cv.bind("<MouseWheel>", lambda e: cv.yview_scroll(-1 * (e.delta // 120), "units"))
+
+        entries = []
+        try:
+            if sc:
+                res = sc.get_client().table("kast_bon_history") \
+                    .select("*").order("created_at", desc=True).limit(100).execute()
+                entries = res.data or []
+        except Exception:
+            pass
+
+        if not entries:
+            tk.Label(inner, text="Geen geschiedenis gevonden.", bg=BG,
+                     fg=TEXT_MUTED, font=(FONT, 10)).pack(pady=40)
+            return
+
+        for entry in entries:
+            self._history_row(inner, entry)
+
+    def _history_row(self, parent, entry):
+        row = tk.Frame(parent, bg=BG, highlightbackground=BORDER, highlightthickness=1)
+        row.pack(fill=tk.X, pady=(0, 8))
+
+        info = tk.Frame(row, bg=BG)
+        info.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=14, pady=10)
+
+        ts = entry.get("created_at", "")[:16].replace("T", " ")
+        naam = entry.get("klantnaam", "—")
+        order = entry.get("ordernummer", "—")
+        datum = entry.get("datum", "—")
+        tijdvak = entry.get("tijdsvak", "—")
+
+        tk.Label(info, text=f"📦  {naam}  •  #{order}", bg=BG, fg=TEXT_DARK,
+                 font=(FONT, 10, "bold"), anchor="w").pack(anchor="w")
+        tk.Label(info, text=f"Levering: {datum}  {tijdvak}  •  Aangemaakt: {ts}",
+                 bg=BG, fg=TEXT_MUTED, font=(FONT, 8), anchor="w").pack(anchor="w")
+
+        btn_frame = tk.Frame(row, bg=BG)
+        btn_frame.pack(side=tk.RIGHT, padx=10, pady=8)
+
+        def make_btn(text, cmd, bg=ACCENT, fg="#FFF"):
+            return tk.Button(btn_frame, text=text, command=cmd,
+                             bg=bg, fg=fg, activebackground="#2E2E4E",
+                             activeforeground="#FFF", font=(FONT, 8), bd=0,
+                             relief=tk.FLAT, padx=8, pady=4, cursor="hand2")
+
+        make_btn("PDF", lambda e=entry: self._history_action(e, "pdf")).pack(side=tk.LEFT, padx=(0, 4))
+        make_btn("Mail: Datum",   lambda e=entry: self._history_action(e, "datum_mail"),
+                 bg=ORANGE).pack(side=tk.LEFT, padx=(0, 4))
+        make_btn("Mail: Tijdvak", lambda e=entry: self._history_action(e, "tijdvak_mail"),
+                 bg=ORANGE).pack(side=tk.LEFT, padx=(0, 4))
+        make_btn("Verwijderen",   lambda e=entry, r=row: self._history_delete(e, r),
+                 bg=RED).pack(side=tk.LEFT)
+
+    def _history_action(self, entry, action):
+        self._from_history = True
+        self.datum_var.set(entry.get("datum", ""))
+        self.tijdsvak_var.set(entry.get("tijdsvak", ""))
+        self.soort_var.set(entry.get("soort", ""))
+        self.klantnaam_var.set(entry.get("klantnaam", ""))
+        self.ordernummer_var.set(entry.get("ordernummer", ""))
+        self.straatnaam_var.set(entry.get("straatnaam", ""))
+        self.postcode_var.set(entry.get("postcode", ""))
+        self.plaatsnaam_var.set(entry.get("plaatsnaam", ""))
+        self.telefoon_var.set(entry.get("telefoon", ""))
+        self.email_var.set(entry.get("email", ""))
+        products = entry.get("products") or []
+        self._products = [tuple(p) for p in products if p]
+        self._refresh_product_list()
+        self.bijzonderheden_text.delete("1.0", tk.END)
+        bijz = entry.get("bijzonderheden", "")
+        if bijz:
+            self.bijzonderheden_text.insert("1.0", bijz)
+        if action == "pdf":
+            self.gen_pdf()
+        elif action == "datum_mail":
+            self._send_datum_mail()
+        elif action == "tijdvak_mail":
+            self._send_tijdvak_mail()
+        self._from_history = False
+
+    def _history_delete(self, entry, row_widget):
+        if not messagebox.askyesno("Verwijderen",
+                                   f"Bon van {entry.get('klantnaam')} verwijderen uit geschiedenis?"):
+            return
+        try:
+            if sc:
+                sc.get_client().table("kast_bon_history") \
+                    .delete().eq("id", entry["id"]).execute()
+            row_widget.destroy()
+        except Exception as e:
+            messagebox.showerror("Fout", f"Kon niet verwijderen: {e}")
+
     # ── Mail ─────────────────────────────────────────────────────────────────
 
     def _open_outlook_mail(self, email, subject, html_body):
@@ -1057,6 +1234,7 @@ die kan ontstaan aan en rond de woning tijdens leveren, tenzij er sprake en bewi
             return
         tray_code = self._tray_map.get(self.tray_var.get(), 1)
         if self.print_via_gdi(printer_name, images, tray_code):
+            self._save_to_history()
             messagebox.showinfo("Succes", f"123kast bon (4 pagina's) verstuurd naar {printer_name}.")
         else:
             messagebox.showerror("Fout", "Kon niet printen.")
@@ -1065,6 +1243,7 @@ die kan ontstaan aan en rond de woning tijdens leveren, tenzij er sprake en bewi
         pdf_path = os.path.abspath("123kast_bon.pdf")
         if not self._build_pdf(pdf_path):
             return
+        self._save_to_history()
         try:
             if os.name == 'nt':
                 os.startfile(pdf_path)

@@ -338,8 +338,10 @@ class ExcellentApp:
     _DEFAULT_STATS = {
         "totaal_labels_gegenereerd": 0,
         "totaal_assistentie_bonnen": 0,
+        "totaal_kast_bonnen":        0,
         "laatste_label_datum": "",
-        "laatste_bon_datum": "",
+        "laatste_bon_datum":   "",
+        "laatste_kast_datum":  "",
     }
 
     def load_stats(self):
@@ -351,8 +353,10 @@ class ExcellentApp:
                 return {
                     "totaal_labels_gegenereerd": row.get("totaal_labels_gegenereerd", 0),
                     "totaal_assistentie_bonnen": row.get("totaal_assistentie_bonnen", 0),
+                    "totaal_kast_bonnen":        row.get("totaal_kast_bonnen", 0),
                     "laatste_label_datum":       row.get("laatste_label_datum", ""),
                     "laatste_bon_datum":         row.get("laatste_bon_datum", ""),
+                    "laatste_kast_datum":        row.get("laatste_kast_datum", ""),
                 }
         except Exception:
             pass
@@ -400,6 +404,19 @@ class ExcellentApp:
         data = self.load_stats()
         data["totaal_assistentie_bonnen"] += 1
         data["laatste_bon_datum"] = datetime.now().strftime("%d-%m-%Y %H:%M")
+        self.save_stats(data)
+
+    def increment_kast_bonnen(self):
+        """Verhoog 123kast bon-teller atomisch via Supabase RPC."""
+        try:
+            sc.get_client().rpc("increment_kast_bonnen", {}).execute()
+            sc.log_activity("kast_bon", 1)
+            return
+        except Exception:
+            pass
+        data = self.load_stats()
+        data["totaal_kast_bonnen"] += 1
+        data["laatste_kast_datum"] = datetime.now().strftime("%d-%m-%Y %H:%M")
         self.save_stats(data)
 
     # ════════════════════════════════════════════════════════════════════════
@@ -457,8 +474,8 @@ class ExcellentApp:
         # ── Rij B: Snelkoppelings-tegels ─────────────────────────────────────
         tiles_row = tk.Frame(page, bg=BG_ROOT)
         tiles_row.pack(fill=tk.X, pady=(0, 16))
-        tiles_row.columnconfigure(0, weight=1)
-        tiles_row.columnconfigure(1, weight=1)
+        for i in range(3):
+            tiles_row.columnconfigure(i, weight=1)
 
         self._tile(tiles_row, ICON_LABEL, "Label Maker",
                    "Genereer en print verhuislabels",
@@ -466,17 +483,22 @@ class ExcellentApp:
         self._tile(tiles_row, ICON_ASSISTENTIE, "Assistentie Bon",
                    "Maak een assistentie bon PDF",
                    BLUE, self.show_assistentie_bon, col=1)
+        self._tile(tiles_row, ICON_KAST, "123kast Bon",
+                   "Leveringsbon & tevredenheidsonderzoek",
+                   ORANGE, self.show_kast_bon, col=2)
 
         # ── Rij C: Statistieken (echte data uit JSON) ────────────────────────
         stats = self.load_stats()
-        labels_totaal = stats["totaal_labels_gegenereerd"]
-        bons_totaal   = stats["totaal_assistentie_bonnen"]
-        laatste_label = stats["laatste_label_datum"] or "—"
-        laatste_bon   = stats["laatste_bon_datum"]   or "—"
+        labels_totaal  = stats["totaal_labels_gegenereerd"]
+        bons_totaal    = stats["totaal_assistentie_bonnen"]
+        kastbon_totaal = stats["totaal_kast_bonnen"]
+        laatste_label  = stats["laatste_label_datum"] or "—"
+        laatste_bon    = stats["laatste_bon_datum"]   or "—"
+        laatste_kast   = stats["laatste_kast_datum"]  or "—"
 
         stats_row = tk.Frame(page, bg=BG_ROOT)
         stats_row.pack(fill=tk.X, pady=(0, 16))
-        for i in range(3):
+        for i in range(4):
             stats_row.columnconfigure(i, weight=1)
 
         self._stat_card(stats_row, "Gegenereerde Labels",
@@ -485,7 +507,10 @@ class ExcellentApp:
         self._stat_card(stats_row, "Assistentie Bons",
                         str(bons_totaal),
                         f"Laatste: {laatste_bon}", BLUE, col=1)
-        self._totaal_card(stats_row, labels_totaal, bons_totaal, col=2)
+        self._stat_card(stats_row, "123kast Bons",
+                        str(kastbon_totaal),
+                        f"Laatste: {laatste_kast}", ORANGE, col=2)
+        self._totaal_card(stats_row, labels_totaal, bons_totaal, kastbon_totaal, col=3)
 
         # ── Rij D: Activiteit + Module gebruik ──────────────────────────────
         bottom_row = tk.Frame(page, bg=BG_ROOT)
@@ -493,7 +518,7 @@ class ExcellentApp:
         bottom_row.columnconfigure(0, weight=3)
         bottom_row.columnconfigure(1, weight=2)
 
-        self._activiteit_card(bottom_row, laatste_label, laatste_bon, col=0)
+        self._activiteit_card(bottom_row, laatste_label, laatste_bon, laatste_kast, col=0)
         self._progress_card(bottom_row, labels_totaal, bons_totaal, col=1)
 
     # ── Dashboard kaart-helpers ──────────────────────────────────────────────
@@ -529,7 +554,7 @@ class ExcellentApp:
     def _stat_card(self, parent, title, value, subtitle, color, col):
         card, inner = make_card(parent, accent_color=color, padx=18, pady=16)
         card.grid(row=0, column=col, sticky="nsew",
-                  padx=(0, 12) if col < 2 else 0)
+                  padx=(0, 12) if col < 3 else 0)
 
         tk.Label(inner, text=title, bg=BG_CARD, fg=TEXT_MUTED,
                  font=(FONT, 9), anchor="w").pack(anchor="w")
@@ -546,7 +571,7 @@ class ExcellentApp:
             b.pack(side=tk.LEFT, padx=2)
             b.pack_propagate(False)
 
-    def _totaal_card(self, parent, labels_totaal, bons_totaal, col):
+    def _totaal_card(self, parent, labels_totaal, bons_totaal, kastbon_totaal, col):
         """Donkere samenvattings-kaart met echte totalen."""
         card = tk.Frame(parent, bg=BG_DARK_CARD,
                         highlightbackground=BORDER, highlightthickness=1)
@@ -557,7 +582,7 @@ class ExcellentApp:
 
         tk.Label(inner, text="Totaal activiteit", bg=BG_DARK_CARD, fg="#8A8FA8",
                  font=(FONT, 9), anchor="w").pack(anchor="w")
-        totaal = labels_totaal + bons_totaal
+        totaal = labels_totaal + bons_totaal + kastbon_totaal
         tk.Label(inner, text=str(totaal), bg=BG_DARK_CARD, fg=TEXT_LIGHT,
                  font=(FONT, 28, "bold"), anchor="w").pack(anchor="w", pady=(4, 2))
         tk.Label(inner, text="TOTAAL", bg=GREEN, fg=TEXT_LIGHT,
@@ -567,6 +592,9 @@ class ExcellentApp:
                  bg=BG_DARK_CARD, fg="#8A8FA8",
                  font=(FONT, 8), anchor="w").pack(anchor="w", pady=(2, 0))
         tk.Label(inner, text=f"Bons: {bons_totaal}",
+                 bg=BG_DARK_CARD, fg="#8A8FA8",
+                 font=(FONT, 8), anchor="w").pack(anchor="w", pady=(2, 0))
+        tk.Label(inner, text=f"123kast: {kastbon_totaal}",
                  bg=BG_DARK_CARD, fg="#8A8FA8",
                  font=(FONT, 8), anchor="w").pack(anchor="w", pady=(2, 4))
 
@@ -588,7 +616,7 @@ class ExcellentApp:
         bar_cv.bind("<Configure>", draw)
         bar_cv.after(120, draw)
 
-    def _activiteit_card(self, parent, laatste_label, laatste_bon, col):
+    def _activiteit_card(self, parent, laatste_label, laatste_bon, laatste_kast, col):
         """Kaart met recente activiteiten per gebruiker uit Supabase."""
         card, inner = make_card(parent, accent_color=GREEN, padx=18, pady=16)
         card.grid(row=0, column=col, sticky="nsew", padx=(0, 12))
@@ -614,9 +642,9 @@ class ExcellentApp:
                 email  = entry.get("user_email", "onbekend")
                 aantal = entry.get("aantal", 1)
                 ts     = entry.get("created_at", "")[:16].replace("T", " ")
-                color  = GREEN if action == "label" else BLUE
-                icon   = ICON_LABEL if action == "label" else ICON_ASSISTENTIE
-                label  = f"{aantal}× Label" if action == "label" else "Assistentie Bon"
+                color  = GREEN if action == "label" else (ORANGE if action == "kast_bon" else BLUE)
+                icon   = ICON_LABEL if action == "label" else (ICON_KAST if action == "kast_bon" else ICON_ASSISTENTIE)
+                label  = f"{aantal}× Label" if action == "label" else ("123kast Bon" if action == "kast_bon" else "Assistentie Bon")
 
                 row = tk.Frame(inner, bg=BG_CARD,
                                highlightbackground=BORDER, highlightthickness=1)
@@ -631,8 +659,9 @@ class ExcellentApp:
         else:
             # Fallback: toon laatste datums uit stats
             for icon, lbl, datum, color in [
-                (ICON_LABEL,       "Label gegenereerd",     laatste_label, GREEN),
-                (ICON_ASSISTENTIE, "Assistentie Bon gemaakt", laatste_bon, BLUE),
+                (ICON_LABEL,       "Label gegenereerd",       laatste_label, GREEN),
+                (ICON_ASSISTENTIE, "Assistentie Bon gemaakt", laatste_bon,   BLUE),
+                (ICON_KAST,        "123kast Bon gemaakt",     laatste_kast,  ORANGE),
             ]:
                 row = tk.Frame(inner, bg=BG_CARD,
                                highlightbackground=BORDER, highlightthickness=1)
@@ -722,17 +751,23 @@ class ExcellentApp:
         tk.Label(inner, text="Verdeling", bg=BG_CARD, fg=TEXT_DARK,
                  font=(FONT, 12, "bold"), anchor="w").pack(anchor="w", pady=(2, 10))
 
-        totaal = labels_totaal + bons_totaal
+        stats = self.load_stats()
+        kastbon_totaal = stats.get("totaal_kast_bonnen", 0)
+
+        totaal = labels_totaal + bons_totaal + kastbon_totaal
         if totaal > 0:
-            label_pct = int(labels_totaal / totaal * 100)
-            bon_pct   = int(bons_totaal   / totaal * 100)
+            label_pct   = int(labels_totaal  / totaal * 100)
+            bon_pct     = int(bons_totaal    / totaal * 100)
+            kastbon_pct = int(kastbon_totaal / totaal * 100)
         else:
-            label_pct = 50
-            bon_pct   = 50
+            label_pct   = 34
+            bon_pct     = 33
+            kastbon_pct = 33
 
         cats = [
-            ("Label Maker",     label_pct, GREEN),
-            ("Assistentie Bon", bon_pct,   BLUE),
+            ("Label Maker",     label_pct,   GREEN),
+            ("Assistentie Bon", bon_pct,     BLUE),
+            ("123kast Bon",     kastbon_pct, ORANGE),
         ]
         for name, pct, color in cats:
             row = tk.Frame(inner, bg=BG_CARD)
@@ -781,11 +816,13 @@ class ExcellentApp:
             for r in (res.data or []):
                 e = r["user_email"]
                 if e not in user_stats:
-                    user_stats[e] = {"labels": 0, "bons": 0, "laatste": r["created_at"][:16].replace("T", " ")}
+                    user_stats[e] = {"labels": 0, "bons": 0, "kastbons": 0, "laatste": r["created_at"][:16].replace("T", " ")}
                 if r["action_type"] == "label":
-                    user_stats[e]["labels"] += r.get("aantal", 0)
+                    user_stats[e]["labels"]   += r.get("aantal", 0)
+                elif r["action_type"] == "kast_bon":
+                    user_stats[e]["kastbons"] += r.get("aantal", 1)
                 else:
-                    user_stats[e]["bons"] += r.get("aantal", 1)
+                    user_stats[e]["bons"]     += r.get("aantal", 1)
             log_rows = (res.data or [])[:50]
         except Exception:
             pass
@@ -793,7 +830,7 @@ class ExcellentApp:
         # ── Rij A: Overzichtskaarten ──────────────────────────────────────────
         top_row = tk.Frame(page, bg=BG_ROOT)
         top_row.pack(fill=tk.X, pady=(0, 16))
-        for i in range(3):
+        for i in range(4):
             top_row.columnconfigure(i, weight=1)
 
         stats_global = self.load_stats()
@@ -803,6 +840,8 @@ class ExcellentApp:
                         str(stats_global["totaal_labels_gegenereerd"]), "alle gebruikers", GREEN, col=1)
         self._stat_card(top_row, "Totaal bons",
                         str(stats_global["totaal_assistentie_bonnen"]), "alle gebruikers", BLUE, col=2)
+        self._stat_card(top_row, "Totaal 123kast Bons",
+                        str(stats_global["totaal_kast_bonnen"]), "alle gebruikers", ORANGE, col=3)
 
         # ── Rij B: Per-gebruiker tabel ────────────────────────────────────────
         tbl_card, tbl_inner = make_card(page, accent_color=PURPLE, padx=18, pady=16)
@@ -815,7 +854,7 @@ class ExcellentApp:
         # Tabelheader
         hdr = tk.Frame(tbl_inner, bg=ACCENT)
         hdr.pack(fill=tk.X)
-        for txt, w in [("Gebruiker", 260), ("Labels", 80), ("Bons", 80), ("Laatste actie", 160)]:
+        for txt, w in [("Gebruiker", 220), ("Labels", 70), ("Bons", 70), ("123kast", 70), ("Laatste actie", 150)]:
             tk.Label(hdr, text=txt, bg=ACCENT, fg=TEXT_LIGHT,
                      font=(FONT, 9, "bold"), width=w//8, anchor="w",
                      padx=8, pady=5).pack(side=tk.LEFT)
@@ -825,8 +864,9 @@ class ExcellentApp:
                 row_bg = BG_CARD if i % 2 == 0 else "#F7F9FC"
                 row = tk.Frame(tbl_inner, bg=row_bg, highlightbackground=BORDER, highlightthickness=1)
                 row.pack(fill=tk.X)
-                for txt, w in [(email, 260), (str(d["labels"]), 80),
-                               (str(d["bons"]), 80), (d["laatste"], 160)]:
+                for txt, w in [(email, 220), (str(d["labels"]), 70),
+                               (str(d["bons"]), 70), (str(d.get("kastbons", 0)), 70),
+                               (d["laatste"], 150)]:
                     tk.Label(row, text=txt, bg=row_bg, fg=TEXT_DARK,
                              font=(FONT, 9), width=w//8, anchor="w",
                              padx=8, pady=5).pack(side=tk.LEFT)
@@ -853,9 +893,9 @@ class ExcellentApp:
             email  = entry.get("user_email", "?")
             aantal = entry.get("aantal", 1)
             ts     = entry.get("created_at", "")[:16].replace("T", " ")
-            color  = GREEN if action == "label" else BLUE
-            icon   = ICON_LABEL if action == "label" else ICON_ASSISTENTIE
-            lbl    = f"{aantal}× Label" if action == "label" else "Assistentie Bon"
+            color  = GREEN if action == "label" else (ORANGE if action == "kast_bon" else BLUE)
+            icon   = ICON_LABEL if action == "label" else (ICON_KAST if action == "kast_bon" else ICON_ASSISTENTIE)
+            lbl    = f"{aantal}× Label" if action == "label" else ("123kast Bon" if action == "kast_bon" else "Assistentie Bon")
 
             r = tk.Frame(log_inner, bg=BG_CARD, highlightbackground=BORDER, highlightthickness=1)
             r.pack(fill=tk.X, pady=(0, 4))
@@ -1230,102 +1270,166 @@ def _check_for_update(root: tk.Tk):
 
 
 def _show_update_popup(root: tk.Tk, latest: str, asset_url: str, sha256_url: str | None = None):
-    # Donker overlay over het hele venster
     overlay = tk.Frame(root, bg="#000000")
     overlay.place(relx=0, rely=0, relwidth=1, relheight=1)
     overlay.configure(cursor="arrow")
 
-    # Popup kaart gecentreerd
     card = tk.Frame(overlay, bg="#FFFFFF",
                     highlightbackground="#E8EAF0", highlightthickness=1)
-    card.place(relx=0.5, rely=0.5, anchor="center", width=400, height=270)
+    card.place(relx=0.5, rely=0.5, anchor="center", width=420, height=300)
 
-    # Header
     header = tk.Frame(card, bg=ACCENT, height=56)
     header.pack(fill=tk.X)
     header.pack_propagate(False)
-    tk.Label(header, text="Update beschikbaar",
+    tk.Label(header, text="🔄  Update beschikbaar",
              bg=ACCENT, fg="#FFFFFF", font=(FONT, 13, "bold")).pack(expand=True)
 
-    body = tk.Frame(card, bg="#FFFFFF", padx=28, pady=20)
+    body = tk.Frame(card, bg="#FFFFFF", padx=28, pady=18)
     body.pack(fill=tk.BOTH, expand=True)
 
-    tk.Label(body, text="Er is een nieuwe versie van Excellent App.",
+    tk.Label(body, text="Er is een nieuwe versie van Excellent App beschikbaar.",
              bg="#FFFFFF", fg="#1A1A2E", font=(FONT, 10)).pack(anchor="w")
 
     ver_row = tk.Frame(body, bg="#FFFFFF")
-    ver_row.pack(anchor="w", pady=(12, 0))
+    ver_row.pack(anchor="w", pady=(10, 0))
     tk.Label(ver_row, text="Huidige versie:", bg="#FFFFFF", fg="#8A8FA8",
              font=(FONT, 9)).pack(side=tk.LEFT)
     tk.Label(ver_row, text=f"  {VERSION}", bg="#FFFFFF", fg="#1A1A2E",
              font=(FONT, 9, "bold")).pack(side=tk.LEFT)
 
     ver_row2 = tk.Frame(body, bg="#FFFFFF")
-    ver_row2.pack(anchor="w", pady=(4, 0))
-    tk.Label(ver_row2, text="Nieuwe versie:  ", bg="#FFFFFF", fg="#8A8FA8",
+    ver_row2.pack(anchor="w", pady=(3, 0))
+    tk.Label(ver_row2, text="Nieuwe versie: ", bg="#FFFFFF", fg="#8A8FA8",
              font=(FONT, 9)).pack(side=tk.LEFT)
-    tk.Label(ver_row2, text=f"{latest}", bg="#FFFFFF", fg="#4CAF50",
+    tk.Label(ver_row2, text=latest, bg="#FFFFFF", fg="#4CAF50",
              font=(FONT, 9, "bold")).pack(side=tk.LEFT)
 
-    status_var = tk.StringVar()
+    # Voortgangsbalk
+    prog_track = tk.Frame(body, bg="#E8EAF0", height=6)
+    prog_track.pack(fill=tk.X, pady=(14, 0))
+    prog_track.pack_propagate(False)
+    prog_bar = tk.Frame(prog_track, bg=GREEN, width=0, height=6)
+    prog_bar.place(x=0, y=0, relheight=1)
+
+    status_var = tk.StringVar(value="Klik op 'Update installeren' om te starten.")
     tk.Label(body, textvariable=status_var, bg="#FFFFFF", fg="#8A8FA8",
-             font=(FONT, 8)).pack(anchor="w", pady=(10, 0))
+             font=(FONT, 8)).pack(anchor="w", pady=(6, 0))
+
+    def _set_progress(pct):
+        try:
+            w = prog_track.winfo_width()
+            prog_bar.place(x=0, y=0, relheight=1, width=int(w * pct / 100))
+        except Exception:
+            pass
 
     def _do_update():
-        update_btn.config(text="Downloaden...", state=tk.DISABLED)
-        status_var.set("Bezig met downloaden, even geduld...")
-        overlay.update()
+        update_btn.config(text="Bezig...", state=tk.DISABLED)
+        later_btn.config(state=tk.DISABLED)
+        status_var.set("Download wordt gestart...")
 
         def _download():
             try:
                 import tempfile, subprocess, hashlib
                 tmp = os.path.join(tempfile.gettempdir(), "ExcellentApp_update.exe")
-                urllib.request.urlretrieve(asset_url, tmp)
+
+                # Download met voortgang + gelijktijdig SHA256 berekenen
+                req = urllib.request.urlopen(
+                    urllib.request.Request(asset_url, headers={"User-Agent": "Excellent-App"}),
+                    timeout=120)
+                total = int(req.headers.get("Content-Length", 0))
+                downloaded = 0
+                h = hashlib.sha256()
+                with open(tmp, "wb") as f:
+                    while True:
+                        chunk = req.read(65536)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        h.update(chunk)
+                        downloaded += len(chunk)
+                        if total > 0:
+                            pct = int(downloaded / total * 100)
+                            root.after(0, lambda p=pct: (
+                                status_var.set(f"Downloaden... {p}%"),
+                                _set_progress(p)))
+
+                # SHA256 verificatie
                 if sha256_url:
                     try:
                         with urllib.request.urlopen(sha256_url, timeout=10) as resp:
                             expected = resp.read().decode().strip().split()[0].lower()
-                        h = hashlib.sha256()
-                        with open(tmp, "rb") as f:
-                            for chunk in iter(lambda: f.read(8192), b""):
-                                h.update(chunk)
                         if h.hexdigest().lower() != expected:
                             os.remove(tmp)
-                            root.after(0, lambda: status_var.set("Hash verificatie mislukt! Update geannuleerd."))
+                            root.after(0, lambda: (
+                                status_var.set("Hashverificatie mislukt — update geannuleerd."),
+                                update_btn.config(text="Opnieuw proberen", state=tk.NORMAL),
+                                later_btn.config(state=tk.NORMAL)))
                             return
                     except Exception:
                         pass
+
+                # Alleen als .exe
                 current_exe = sys.executable if getattr(sys, "frozen", False) else None
                 if not current_exe:
-                    root.after(0, lambda: status_var.set("Werkt alleen als .exe"))
+                    root.after(0, lambda: (
+                        status_var.set("Update werkt alleen vanuit de .exe versie."),
+                        update_btn.config(text="Update installeren", state=tk.NORMAL),
+                        later_btn.config(state=tk.NORMAL)))
                     return
+
+                exe_name = os.path.basename(current_exe)
                 bat = os.path.join(tempfile.gettempdir(), "excellent_update.bat")
-                with open(bat, "w") as f:
+                with open(bat, "w", encoding="utf-8") as f:
                     f.write(
                         "@echo off\n"
-                        "timeout /t 6 /nobreak > nul\n"
-                        f'taskkill /f /im "Excellent App.exe" > nul 2>&1\n'
                         "timeout /t 3 /nobreak > nul\n"
-                        f'copy /Y "{tmp}" "{current_exe}"\n'
-                        "timeout /t 5 /nobreak > nul\n"
+                        f'taskkill /f /im "{exe_name}" > nul 2>&1\n'
+                        ":RETRY\n"
+                        "timeout /t 2 /nobreak > nul\n"
+                        f'copy /Y "{tmp}" "{current_exe}" > nul 2>&1\n'
+                        "if errorlevel 1 goto RETRY\n"
+                        "timeout /t 1 /nobreak > nul\n"
                         f'start "" "{current_exe}"\n'
-                        "del \"%~f0\"\n"
+                        f'del "{tmp}" > nul 2>&1\n'
+                        'del "%~f0"\n'
                     )
+
                 def _apply():
-                    subprocess.Popen(["cmd", "/c", bat],
-                                     creationflags=subprocess.CREATE_NO_WINDOW)
-                    root.destroy()
+                    status_var.set("Installeren... app start zo opnieuw op.")
+                    _set_progress(100)
+                    overlay.update()
+                    subprocess.Popen(
+                        ["cmd", "/c", bat],
+                        creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW
+                    )
+                    root.after(800, root.destroy)
+
                 root.after(0, _apply)
+
             except Exception as e:
-                root.after(0, lambda: status_var.set(f"Fout: {e}"))
+                root.after(0, lambda: (
+                    status_var.set(f"Fout: {e}"),
+                    update_btn.config(text="Opnieuw proberen", state=tk.NORMAL),
+                    later_btn.config(state=tk.NORMAL)))
+
         threading.Thread(target=_download, daemon=True).start()
 
-    update_btn = tk.Button(body, text="Update uitvoeren", command=_do_update,
+    btn_row = tk.Frame(body, bg="#FFFFFF")
+    btn_row.pack(fill=tk.X, pady=(10, 0))
+
+    later_btn = tk.Button(btn_row, text="Later", command=overlay.destroy,
+                          bg="#F0F2F5", fg="#1A1A2E",
+                          activebackground="#E8EAF0", activeforeground="#1A1A2E",
+                          font=(FONT, 9), bd=0, relief=tk.FLAT,
+                          pady=9, padx=16, cursor="hand2")
+    later_btn.pack(side=tk.LEFT)
+
+    update_btn = tk.Button(btn_row, text="Update installeren", command=_do_update,
                            bg=ACCENT, fg="#FFFFFF",
                            activebackground="#2E2E4E", activeforeground="#FFFFFF",
                            font=(FONT, 9, "bold"), bd=0, relief=tk.FLAT,
-                           pady=10, cursor="hand2")
-    update_btn.pack(fill=tk.X, pady=(8, 0))
+                           pady=9, cursor="hand2")
+    update_btn.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(12, 0))
 
 
 def _launch_app():
