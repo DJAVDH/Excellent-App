@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 import os
+import sys
 import subprocess
 import threading
 import tempfile
@@ -22,6 +23,12 @@ from reportlab.lib import colors
 from reportlab.platypus import Table, TableStyle
 from reportlab.lib.utils import simpleSplit
 import win32print
+
+def _base_dir():
+    if getattr(sys, 'frozen', False):
+        return sys._MEIPASS
+    return os.path.abspath(os.path.dirname(__file__))
+
 
 BG         = "#FFFFFF"
 BG_FIELD   = "#F7F9FC"
@@ -402,7 +409,7 @@ class KastBonComponent:
     def _page1(self, c, W, H, M, datum, tijdsvak, soort, klantnaam, ordernummer,
                straatnaam, postcode, plaatsnaam, telefoon, products, bijz):
         y = H - M
-        base = os.path.abspath(os.path.dirname(__file__))
+        base = _base_dir()
 
         logo_path = os.path.join(base, "logobanner.png")
         logo_h = 18 * mm
@@ -570,7 +577,7 @@ class KastBonComponent:
 
     def _page2(self, c, W, H, M, klantnaam, ordernummer, datum):
         y = H - M
-        base = os.path.abspath(os.path.dirname(__file__))
+        base = _base_dir()
 
         logo_path = os.path.join(base, "123kast-banner.jpg")
         logo_h = 20 * mm
@@ -702,7 +709,7 @@ class KastBonComponent:
 
     def _page3(self, c, W, H, M):
         y = H - M
-        base = os.path.abspath(os.path.dirname(__file__))
+        base = _base_dir()
 
         logo_path = os.path.join(base, "123kast-banner.jpg")
         logo_h = 14 * mm
@@ -814,7 +821,7 @@ class KastBonComponent:
 
     def _page4(self, c, W, H, M):
         y = H - M
-        base = os.path.abspath(os.path.dirname(__file__))
+        base = _base_dir()
 
         logo_path = os.path.join(base, "123kast-banner.jpg")
         logo_h = 14 * mm
@@ -898,7 +905,7 @@ class KastBonComponent:
 
     def _open_outlook_mail(self, email, subject, html_body):
         try:
-            base = os.path.abspath(os.path.dirname(__file__))
+            base = _base_dir()
 
             msg = MIMEMultipart("related")
             msg["To"]       = email

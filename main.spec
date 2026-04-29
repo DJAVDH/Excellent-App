@@ -6,7 +6,7 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[('logo.ico', '.'), ('logobanner.png', '.')],
+    datas=[('logo.ico', '.'), ('logobanner.png', '.'), ('123kast-banner.jpg', '.')],
     hiddenimports=[
         'ttkbootstrap',
         'reportlab',
