@@ -467,10 +467,6 @@ class ExcellentApp:
         tk.Label(bi, text="Welkom terug \U0001f44b",
                  bg="#F7F9FC", fg=TEXT_DARK,
                  font=(FONT, 14, "bold"), anchor="w").pack(anchor="w")
-        tk.Label(bi,
-                 text="Kies een module in het menu aan de linkerkant om te beginnen.",
-                 bg="#F7F9FC", fg=TEXT_MUTED,
-                 font=(FONT, 10), anchor="w").pack(anchor="w", pady=(4, 0))
 
         # ── Rij B: Snelkoppelings-tegels ─────────────────────────────────────
         tiles_row = tk.Frame(page, bg=BG_ROOT)
@@ -1455,6 +1451,15 @@ def _show_update_popup(root: tk.Tk, latest: str, asset_url: str, sha256_url=None
     update_btn.pack(fill=tk.X)
 
 
+def _set_app_icon_id():
+    """Koppel het exe-icoon correct aan de taakbalk op Windows 10/11."""
+    try:
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("Excellent.App")
+    except Exception:
+        pass
+
+
 def _launch_app():
     sc.check_admin_role()
     main_root = tk.Tk()
@@ -1475,6 +1480,7 @@ def _start_login():
 
 
 if __name__ == "__main__":
+    _set_app_icon_id()
     if sc.restore_session():
         _launch_app()
     else:

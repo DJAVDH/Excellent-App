@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk
 import os
+import sys
 
 BG       = "#FFFFFF"
 BG_FIELD = "#F7F9FC"
@@ -32,7 +33,8 @@ class LoginWindow:
         root.resizable(False, False)
         root.eval("tk::PlaceWindow . center")
 
-        ico = os.path.join(os.path.abspath(os.path.dirname(__file__)), "logo.ico")
+        _base = sys._MEIPASS if getattr(sys, "frozen", False) else os.path.abspath(os.path.dirname(__file__))
+        ico = os.path.join(_base, "logo.ico")
         if os.path.exists(ico):
             root.iconbitmap(ico)
 
