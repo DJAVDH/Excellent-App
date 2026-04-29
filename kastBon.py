@@ -63,7 +63,12 @@ def _entry(parent, textvariable=None, width=28):
 class KastBonComponent:
     """123kast Leveringsbon + Tevredenheidsonderzoek"""
 
-    SOORT_OPTIONS = ["Full service", "Deels service", "Montage only", "Levering", "Ophaal"]
+    SOORT_OPTIONS    = ["Full service", "Deels service", "Montage only", "Levering", "Ophaal"]
+    TIJDSVAK_OPTIONS = [
+        "07:00-11:00", "08:00-12:00", "09:00-13:00", "10:00-14:00",
+        "11:00-15:00", "12:00-16:00", "13:00-17:00", "14:00-18:00",
+        "15:00-19:00", "16:00-20:00",
+    ]
 
     def __init__(self, parent, app=None):
         self.parent = parent
@@ -96,13 +101,42 @@ class KastBonComponent:
 
         r = 0
 
+        # ── Mail sectie ──────────────────────────────────────────────────────
+        mail_hdr = tk.Frame(form, bg=BG)
+        mail_hdr.grid(row=r, column=0, columnspan=4, sticky='ew', pady=(0, 6))
+        tk.Label(mail_hdr, text="E-mail verzenden", bg=BG, fg=TEXT_DARK,
+                 font=(FONT, 10, "bold")).pack(side=tk.LEFT)
+        r += 1
+
+        _label(form, "E-mailadres klant").grid(row=r, column=0, sticky='w', pady=(0, 2), padx=(0, 8))
+        _label(form, "Datum levering").grid(row=r, column=2, sticky='w', pady=(0, 2), padx=(0, 8))
+        r += 1
+
+        _entry(form, self.email_var, width=36).grid(row=r, column=0, columnspan=2, sticky='ew', pady=(0, 8), padx=(0, 12))
+        _entry(form, self.datum_var, width=16).grid(row=r, column=2, sticky='ew', pady=(0, 8), padx=(0, 12))
+        r += 1
+
+        BTN_ORANGE_MAIL = dict(bg=ORANGE, fg="#FFFFFF", activebackground="#E55A25",
+                               activeforeground="#FFFFFF", font=(FONT, 10), bd=0,
+                               relief=tk.FLAT, padx=14, pady=7, cursor="hand2")
+        mail_btn_row = tk.Frame(form, bg=BG)
+        mail_btn_row.grid(row=r, column=0, columnspan=4, sticky='w', pady=(0, 12))
+        tk.Button(mail_btn_row, text="Mail: Datum",
+                  command=self._send_datum_mail, **BTN_ORANGE_MAIL).pack(side=tk.LEFT)
+        r += 1
+
+        tk.Frame(form, bg=BORDER, height=1).grid(row=r, column=0, columnspan=4,
+                                                  sticky='ew', pady=(0, 10))
+        r += 1
+
         # ── Rij 1: Datum | Tijdsvak | Soort levering ─────────────────────────
         _label(form, "Datum levering *").grid(row=r, column=0, sticky='w', pady=(0, 2), padx=(0, 8))
         _label(form, "Tijdsvak").grid(row=r, column=1, sticky='w', pady=(0, 2), padx=(0, 8))
         _label(form, "Soort levering").grid(row=r, column=2, sticky='w', pady=(0, 2), padx=(0, 8))
         r += 1
         _entry(form, self.datum_var).grid(row=r, column=0, sticky='ew', pady=(0, 12), padx=(0, 12))
-        _entry(form, self.tijdsvak_var).grid(row=r, column=1, sticky='ew', pady=(0, 12), padx=(0, 12))
+        ttk.Combobox(form, textvariable=self.tijdsvak_var, values=self.TIJDSVAK_OPTIONS,
+                     width=14, font=(FONT, 10)).grid(row=r, column=1, sticky='ew', pady=(0, 12), padx=(0, 12))
         ttk.Combobox(form, textvariable=self.soort_var, values=self.SOORT_OPTIONS,
                      width=16, font=(FONT, 10)).grid(row=r, column=2, columnspan=2,
                                                       sticky='ew', pady=(0, 12))
@@ -128,12 +162,6 @@ class KastBonComponent:
         _entry(form, self.plaatsnaam_var).grid(row=r, column=2, columnspan=2, sticky='ew', pady=(0, 12))
         r += 1
 
-        # ── Rij 4: E-mailadres klant ─────────────────────────────────────────
-        _label(form, "E-mailadres klant").grid(row=r, column=0, sticky='w', pady=(0, 2), padx=(0, 8))
-        r += 1
-        _entry(form, self.email_var, width=40).grid(row=r, column=0, columnspan=4, sticky='ew', pady=(0, 12))
-        r += 1
-
         # ── Divider ──────────────────────────────────────────────────────────
         tk.Frame(form, bg=BORDER, height=1).grid(row=r, column=0, columnspan=4,
                                                   sticky='ew', pady=(0, 10))
@@ -149,37 +177,38 @@ class KastBonComponent:
         # Productenlijst container
         self._prod_list_frame = tk.Frame(form, bg=BG)
         self._prod_list_frame.grid(row=r, column=0, columnspan=4, sticky='ew', pady=(0, 6))
-        self._prod_list_frame.columnconfigure(0, weight=3)
-        self._prod_list_frame.columnconfigure(1, weight=2)
-        self._prod_list_frame.columnconfigure(2, weight=1)
+        self._prod_list_frame.columnconfigure(0, weight=4)
+        self._prod_list_frame.columnconfigure(1, weight=1)
+        self._prod_list_frame.columnconfigure(2, minsize=50, weight=0)
         self._prod_list_frame.columnconfigure(3, weight=0)
 
-        # Kolomkoppen in de lijst
-        for ci, txt in enumerate(["Product type", "Afmetingen", "Aantal", ""]):
-            tk.Label(self._prod_list_frame, text=txt, bg=BG, fg=TEXT_MUTED,
-                     font=(FONT, 8), anchor="w").grid(
-                row=0, column=ci, sticky='w', padx=(0, 6), pady=(0, 2))
         r += 1
 
-        # Invoerrij voor nieuw product
+        # Invoerrij voor nieuw product (rij 0 = koppen, rij 1 = velden)
         inp_row = tk.Frame(form, bg=BG)
         inp_row.grid(row=r, column=0, columnspan=4, sticky='ew', pady=(0, 8))
-        inp_row.columnconfigure(0, weight=3)
-        inp_row.columnconfigure(1, weight=2)
-        inp_row.columnconfigure(2, weight=1)
+        inp_row.columnconfigure(0, weight=4)
+        inp_row.columnconfigure(1, weight=1)
+        inp_row.columnconfigure(2, minsize=50, weight=0)
+        inp_row.columnconfigure(3, weight=0)
+
+        for ci, txt in enumerate(["Product type", "Afmetingen", "Aantal", ""]):
+            tk.Label(inp_row, text=txt, bg=BG, fg=TEXT_MUTED,
+                     font=(FONT, 8), anchor="w").grid(
+                row=0, column=ci, sticky='w', padx=(0, 6), pady=(0, 2))
 
         self._inp_product    = _entry(inp_row)
-        self._inp_afmetingen = _entry(inp_row)
-        self._inp_aantallen  = _entry(inp_row, width=8)
-        self._inp_product.grid(row=0, column=0, sticky='ew', padx=(0, 6))
-        self._inp_afmetingen.grid(row=0, column=1, sticky='ew', padx=(0, 6))
-        self._inp_aantallen.grid(row=0, column=2, sticky='ew', padx=(0, 6))
+        self._inp_afmetingen = _entry(inp_row, width=14)
+        self._inp_aantallen  = _entry(inp_row, width=5)
+        self._inp_product.grid(row=1, column=0, sticky='ew', padx=(0, 6))
+        self._inp_afmetingen.grid(row=1, column=1, sticky='ew', padx=(0, 6))
+        self._inp_aantallen.grid(row=1, column=2, sticky='ew', padx=(0, 6))
 
         tk.Button(inp_row, text="+ Toevoegen", command=self._add_product,
                   bg=ORANGE, fg="#FFFFFF", activebackground="#E55A25",
                   activeforeground="#FFFFFF", font=(FONT, 9, "bold"),
                   bd=0, relief=tk.FLAT, padx=10, pady=5,
-                  cursor="hand2").grid(row=0, column=3, sticky='ew')
+                  cursor="hand2").grid(row=1, column=3, sticky='ew')
         r += 1
 
         # ── Divider ──────────────────────────────────────────────────────────
@@ -196,6 +225,11 @@ class KastBonComponent:
             highlightbackground=BORDER, highlightthickness=1,
             font=(FONT, 10), wrap=tk.WORD)
         self.bijzonderheden_text.grid(row=r, column=0, columnspan=4, sticky='ew', pady=(0, 12))
+        r += 1
+
+        # ── Divider ──────────────────────────────────────────────────────────
+        tk.Frame(form, bg=BORDER, height=1).grid(row=r, column=0, columnspan=4,
+                                                  sticky='ew', pady=(0, 10))
         r += 1
 
         # ── Printer + Papierlade ─────────────────────────────────────────────
@@ -225,13 +259,6 @@ class KastBonComponent:
         BTN_ORANGE = dict(bg=ORANGE, fg="#FFFFFF", activebackground="#E55A25",
                           activeforeground="#FFFFFF", font=(FONT, 10), bd=0,
                           relief=tk.FLAT, padx=14, pady=7, cursor="hand2")
-
-        # Geschiedenis — altijd als eerste, prominent rechts uitgelijnd
-        tk.Button(btn_bar, text="📋  Geschiedenis", command=self.show_history,
-                  bg="#1A1A2E", fg="#FFFFFF", activebackground="#2E2E4E",
-                  activeforeground="#FFFFFF", font=(FONT, 10, "bold"), bd=0,
-                  relief=tk.FLAT, padx=16, pady=7,
-                  cursor="hand2").pack(side=tk.RIGHT)
 
         # Secundaire actie
         tk.Button(btn_bar, text="Leegmaken", command=self.clear_fields,
@@ -268,12 +295,17 @@ class KastBonComponent:
 
     def _refresh_product_list(self):
         for w in self._prod_list_frame.winfo_children():
-            if int(w.grid_info().get("row", 0)) > 0:
-                w.destroy()
+            w.destroy()
+
+        if not self._products:
+            self._prod_list_frame.grid_remove()
+            return
+
+        self._prod_list_frame.grid()
 
         for i, (p, a, n) in enumerate(self._products):
             bg = BG_ROW_ALT if i % 2 else BG
-            row_idx = i + 1
+            row_idx = i
             for ci, txt in enumerate([p, a, n]):
                 tk.Label(self._prod_list_frame, text=txt, bg=bg, fg=TEXT_DARK,
                          font=(FONT, 9), anchor="w",
@@ -861,162 +893,6 @@ class KastBonComponent:
         c.drawCentredString(W / 2, 10 * mm,
                             "123kast.nl & Excellent Packing and Moving B.V.  •  Tevredenheidsonderzoek  (3/3)")
 
-    # ── Geschiedenis ─────────────────────────────────────────────────────────
-
-    def _save_to_history(self):
-        if not sc or getattr(self, "_from_history", False):
-            return
-        try:
-            sc.get_client().table("kast_bon_history").insert({
-                "datum":          self.datum_var.get().strip(),
-                "tijdsvak":       self.tijdsvak_var.get().strip(),
-                "soort":          self.soort_var.get().strip(),
-                "klantnaam":      self.klantnaam_var.get().strip(),
-                "ordernummer":    self.ordernummer_var.get().strip(),
-                "straatnaam":     self.straatnaam_var.get().strip(),
-                "postcode":       self.postcode_var.get().strip(),
-                "plaatsnaam":     self.plaatsnaam_var.get().strip(),
-                "telefoon":       self.telefoon_var.get().strip(),
-                "email":          self.email_var.get().strip(),
-                "products":       [list(p) for p in self._products],
-                "bijzonderheden": self.bijzonderheden_text.get("1.0", tk.END).strip(),
-            }).execute()
-        except Exception:
-            pass
-        if self.app:
-            try:
-                self.app.increment_kast_bonnen()
-            except Exception:
-                pass
-
-    def show_history(self):
-        self._form_card.pack_forget()
-
-        hist = tk.Frame(self.frame, bg=BG, highlightbackground=BORDER, highlightthickness=1)
-        hist.pack(fill=tk.BOTH, expand=True)
-        self._hist_frame = hist
-
-        def go_back():
-            hist.destroy()
-            self._form_card.pack(fill=tk.BOTH, expand=True)
-
-        # ── Header ───────────────────────────────────────────────────────────
-        hdr = tk.Frame(hist, bg=BG)
-        hdr.pack(fill=tk.X, padx=20, pady=(14, 0))
-
-        tk.Button(hdr, text="← Terug", command=go_back,
-                  bg=BG_FIELD, fg=TEXT_DARK, activebackground=BORDER,
-                  activeforeground=TEXT_DARK, font=(FONT, 9), bd=0,
-                  relief=tk.FLAT, padx=10, pady=5, cursor="hand2").pack(side=tk.LEFT)
-
-        tk.Label(hdr, text="Geschiedenis", bg=BG, fg=TEXT_DARK,
-                 font=(FONT, 13, "bold")).pack(side=tk.LEFT, padx=16)
-
-        tk.Frame(hist, bg=BORDER, height=1).pack(fill=tk.X, pady=(10, 0))
-
-        # ── Scrollbaar lijst ─────────────────────────────────────────────────
-        cv = tk.Canvas(hist, bg=BG, highlightthickness=0)
-        sb = ttk.Scrollbar(hist, orient="vertical", command=cv.yview)
-        cv.configure(yscrollcommand=sb.set)
-        sb.pack(side=tk.RIGHT, fill=tk.Y)
-        cv.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
-        inner = tk.Frame(cv, bg=BG)
-        win_id = cv.create_window((0, 0), window=inner, anchor="nw")
-        cv.bind("<Configure>", lambda e: cv.itemconfig(win_id, width=e.width))
-        inner.bind("<Configure>", lambda e: cv.configure(scrollregion=cv.bbox("all")))
-        cv.bind("<MouseWheel>", lambda e: cv.yview_scroll(-1 * (e.delta // 120), "units"))
-
-        entries = []
-        try:
-            if sc:
-                res = sc.get_client().table("kast_bon_history") \
-                    .select("*").order("created_at", desc=True).limit(100).execute()
-                entries = res.data or []
-        except Exception:
-            pass
-
-        if not entries:
-            tk.Label(inner, text="Geen geschiedenis gevonden.", bg=BG,
-                     fg=TEXT_MUTED, font=(FONT, 10)).pack(pady=40)
-            return
-
-        for entry in entries:
-            self._history_row(inner, entry)
-
-    def _history_row(self, parent, entry):
-        row = tk.Frame(parent, bg=BG, highlightbackground=BORDER, highlightthickness=1)
-        row.pack(fill=tk.X, pady=(0, 8))
-
-        info = tk.Frame(row, bg=BG)
-        info.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=14, pady=10)
-
-        ts = entry.get("created_at", "")[:16].replace("T", " ")
-        naam = entry.get("klantnaam", "—")
-        order = entry.get("ordernummer", "—")
-        datum = entry.get("datum", "—")
-        tijdvak = entry.get("tijdsvak", "—")
-
-        tk.Label(info, text=f"📦  {naam}  •  #{order}", bg=BG, fg=TEXT_DARK,
-                 font=(FONT, 10, "bold"), anchor="w").pack(anchor="w")
-        tk.Label(info, text=f"Levering: {datum}  {tijdvak}  •  Aangemaakt: {ts}",
-                 bg=BG, fg=TEXT_MUTED, font=(FONT, 8), anchor="w").pack(anchor="w")
-
-        btn_frame = tk.Frame(row, bg=BG)
-        btn_frame.pack(side=tk.RIGHT, padx=10, pady=8)
-
-        def make_btn(text, cmd, bg=ACCENT, fg="#FFF"):
-            return tk.Button(btn_frame, text=text, command=cmd,
-                             bg=bg, fg=fg, activebackground="#2E2E4E",
-                             activeforeground="#FFF", font=(FONT, 8), bd=0,
-                             relief=tk.FLAT, padx=8, pady=4, cursor="hand2")
-
-        make_btn("PDF", lambda e=entry: self._history_action(e, "pdf")).pack(side=tk.LEFT, padx=(0, 4))
-        make_btn("Mail: Datum",   lambda e=entry: self._history_action(e, "datum_mail"),
-                 bg=ORANGE).pack(side=tk.LEFT, padx=(0, 4))
-        make_btn("Mail: Tijdvak", lambda e=entry: self._history_action(e, "tijdvak_mail"),
-                 bg=ORANGE).pack(side=tk.LEFT, padx=(0, 4))
-        make_btn("Verwijderen",   lambda e=entry, r=row: self._history_delete(e, r),
-                 bg=RED).pack(side=tk.LEFT)
-
-    def _history_action(self, entry, action):
-        self._from_history = True
-        self.datum_var.set(entry.get("datum", ""))
-        self.tijdsvak_var.set(entry.get("tijdsvak", ""))
-        self.soort_var.set(entry.get("soort", ""))
-        self.klantnaam_var.set(entry.get("klantnaam", ""))
-        self.ordernummer_var.set(entry.get("ordernummer", ""))
-        self.straatnaam_var.set(entry.get("straatnaam", ""))
-        self.postcode_var.set(entry.get("postcode", ""))
-        self.plaatsnaam_var.set(entry.get("plaatsnaam", ""))
-        self.telefoon_var.set(entry.get("telefoon", ""))
-        self.email_var.set(entry.get("email", ""))
-        products = entry.get("products") or []
-        self._products = [tuple(p) for p in products if p]
-        self._refresh_product_list()
-        self.bijzonderheden_text.delete("1.0", tk.END)
-        bijz = entry.get("bijzonderheden", "")
-        if bijz:
-            self.bijzonderheden_text.insert("1.0", bijz)
-        if action == "pdf":
-            self.gen_pdf()
-        elif action == "datum_mail":
-            self._send_datum_mail()
-        elif action == "tijdvak_mail":
-            self._send_tijdvak_mail()
-        self._from_history = False
-
-    def _history_delete(self, entry, row_widget):
-        if not messagebox.askyesno("Verwijderen",
-                                   f"Bon van {entry.get('klantnaam')} verwijderen uit geschiedenis?"):
-            return
-        try:
-            if sc:
-                sc.get_client().table("kast_bon_history") \
-                    .delete().eq("id", entry["id"]).execute()
-            row_widget.destroy()
-        except Exception as e:
-            messagebox.showerror("Fout", f"Kon niet verwijderen: {e}")
 
     # ── Mail ─────────────────────────────────────────────────────────────────
 
@@ -1077,12 +953,25 @@ Hopende u hiermee voldoende te hebben geïnformeerd.</p>
         self._open_outlook_mail(email, subject, html)
 
     def _send_tijdvak_mail(self):
-        email   = self.email_var.get().strip()
-        datum   = self.datum_var.get().strip()
-        tijdvak = self.tijdsvak_var.get().strip()
+        email       = self.email_var.get().strip()
+        datum       = self.datum_var.get().strip()
+        tijdvak     = self.tijdsvak_var.get().strip()
+        klantnaam   = self.klantnaam_var.get().strip()
+        ordernummer = self.ordernummer_var.get().strip()
+        straatnaam  = self.straatnaam_var.get().strip()
+        postcode    = self.postcode_var.get().strip()
+        plaatsnaam  = self.plaatsnaam_var.get().strip()
         if not email:
             messagebox.showerror("Fout", "Vul het e-mailadres van de klant in.")
             return
+
+        product_rows_html = "".join(
+            f"<tr><td style='padding:4px 10px 4px 0;'>{p}</td>"
+            f"<td style='padding:4px 10px 4px 0;color:#555;'>{a}</td>"
+            f"<td style='padding:4px 0;color:#555;'>{n}</td></tr>"
+            for p, a, n in (self._products or [("—", "—", "—")])
+        )
+
         subject = "Tijdvak van levering 123Kast.nl"
         html = f"""<html><body style="font-family:Arial,sans-serif;font-size:14px;color:#1a1a1a;">
 <p>Geachte klant van 123kast.nl,</p>
@@ -1098,6 +987,20 @@ U kunt ons verwachten op: <strong>{datum}</strong> tussen <strong>{tijdvak}</str
 <p><strong>Let op:</strong><br>
 Excellent Packing and Moving en/of 123kast.nl is niet verantwoordelijk voor eventuele schade
 die kan ontstaan aan en rond de woning tijdens leveren, tenzij er sprake en bewijs is van grove nalatigheid.</p>
+<hr style="border:none;border-top:1px solid #e0e0e0;margin:16px 0;">
+<p style="margin-bottom:6px;"><strong>Leveringsdetails</strong></p>
+<table style="font-size:13px;border-collapse:collapse;">
+<tr><td style="color:#888;padding-right:12px;">Naam</td><td>{klantnaam}</td></tr>
+<tr><td style="color:#888;padding-right:12px;">Ordernummer</td><td>{ordernummer}</td></tr>
+<tr><td style="color:#888;padding-right:12px;">Adres</td><td>{straatnaam}, {postcode} {plaatsnaam}</td></tr>
+</table>
+<br>
+<p style="margin-bottom:6px;"><strong>Bestelde producten</strong></p>
+<table style="font-size:13px;">
+<tr style="color:#888;"><td style="padding-right:10px;">Product</td><td style="padding-right:10px;">Afmetingen</td><td>Aantal</td></tr>
+{product_rows_html}
+</table>
+<hr style="border:none;border-top:1px solid #e0e0e0;margin:16px 0;">
 <p>Hopende u hiermee voldoende te hebben geïnformeerd.</p>
 <p style="color:#1155CC;">Met vriendelijke groet namens 123Kast.nl<br>
 <strong>Excellent Packing and Moving</strong></p>
@@ -1234,7 +1137,6 @@ die kan ontstaan aan en rond de woning tijdens leveren, tenzij er sprake en bewi
             return
         tray_code = self._tray_map.get(self.tray_var.get(), 1)
         if self.print_via_gdi(printer_name, images, tray_code):
-            self._save_to_history()
             messagebox.showinfo("Succes", f"123kast bon (4 pagina's) verstuurd naar {printer_name}.")
         else:
             messagebox.showerror("Fout", "Kon niet printen.")
@@ -1243,7 +1145,6 @@ die kan ontstaan aan en rond de woning tijdens leveren, tenzij er sprake en bewi
         pdf_path = os.path.abspath("123kast_bon.pdf")
         if not self._build_pdf(pdf_path):
             return
-        self._save_to_history()
         try:
             if os.name == 'nt':
                 os.startfile(pdf_path)
