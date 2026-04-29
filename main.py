@@ -1376,37 +1376,47 @@ def _show_update_popup(root: tk.Tk, latest: str, asset_url: str, sha256_url=None
                     return
 
                 current_exe = sys.executable
-                exe_name = os.path.basename(current_exe)
                 bat = os.path.join(tempfile.gettempdir(), "excellent_update.bat")
+                vbs = os.path.join(tempfile.gettempdir(), "excellent_update_launch.vbs")
 
+                # Geen taskkill: app sluit zichzelf netjes zodat PyInstaller
+                # de _MEI-tempmap opruimt. Taskkill force-kills het process
+                # waardoor de tempmap half achterblijft en de nieuwe exe
+                # python313.dll niet kan laden uit die beschadigde map.
                 with open(bat, "w") as f:
                     f.write(
                         "@echo off\n"
-                        # Wacht tot app zichzelf sluit (1.5s) + extra marge
-                        "timeout /t 5 /nobreak > nul\n"
-                        # Forceer afsluiten voor de zekerheid
-                        f'taskkill /f /im "{exe_name}" > nul 2>&1\n'
-                        "timeout /t 2 /nobreak > nul\n"
-                        # Kopieer met retry (max 15 pogingen)
+                        "timeout /t 6 /nobreak > nul\n"
                         "set COUNT=0\n"
                         ":RETRY\n"
                         "set /a COUNT=COUNT+1\n"
-                        "if %COUNT% gtr 15 goto FAIL\n"
+                        "if %COUNT% gtr 20 goto FAIL\n"
                         f'copy /Y "{tmp}" "{current_exe}" > nul 2>&1\n'
                         "if errorlevel 1 (\n"
                         "    timeout /t 2 /nobreak > nul\n"
                         "    goto RETRY\n"
                         ")\n"
-                        # Wacht even voor schijf flush
                         "timeout /t 2 /nobreak > nul\n"
                         f'start "" "{current_exe}"\n'
                         f'del /f /q "{tmp}" > nul 2>&1\n'
+                        f'del /f /q "{vbs}" > nul 2>&1\n'
                         'del /f /q "%~f0"\n'
                         "exit /b 0\n"
                         ":FAIL\n"
                         f'del /f /q "{tmp}" > nul 2>&1\n'
+                        f'del /f /q "{vbs}" > nul 2>&1\n'
                         'del /f /q "%~f0"\n'
                         "exit /b 1\n"
+                    )
+
+                # VBScript met WindowStyle=0 is gegarandeerd onzichtbaar.
+                # cmd /c met CREATE_NO_WINDOW werkt niet betrouwbaar op
+                # windowed apps die geen console handle hebben.
+                bat_q = bat.replace('"', '""')
+                with open(vbs, "w") as f:
+                    f.write(
+                        'Set sh = CreateObject("WScript.Shell")\n'
+                        f'sh.Run "cmd /c ""{bat_q}""", 0, False\n'
                     )
 
                 def _apply():
@@ -1414,18 +1424,13 @@ def _show_update_popup(root: tk.Tk, latest: str, asset_url: str, sha256_url=None
                         status_var.set("Installeren... app start zo opnieuw op.")
                         _set_progress(100)
                         overlay.update()
-                        # CREATE_NEW_PROCESS_GROUP zorgt dat het proces de parent overleeft
-                        # DEVNULL handles zijn verplicht voor windowed apps zonder console
                         subprocess.Popen(
-                            ["cmd", "/c", bat],
-                            creationflags=(subprocess.CREATE_NEW_PROCESS_GROUP |
-                                           subprocess.CREATE_NO_WINDOW),
+                            ["wscript.exe", "/nologo", vbs],
+                            creationflags=subprocess.CREATE_NO_WINDOW,
                             stdin=subprocess.DEVNULL,
                             stdout=subprocess.DEVNULL,
                             stderr=subprocess.DEVNULL,
-                            close_fds=True,
                         )
-                        # Geef het bat-script 1.5s om te starten voor we sluiten
                         root.after(1500, root.destroy)
                     except Exception as e:
                         root.after(0, lambda err=str(e): _show_error(
