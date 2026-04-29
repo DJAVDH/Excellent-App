@@ -72,7 +72,8 @@ class ExcellentApp:
         root.minsize(860, 560)
 
         # ── App-icoon ────────────────────────────────────────────────────────
-        ico_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), "logo.ico")
+        _base = sys._MEIPASS if getattr(sys, "frozen", False) else os.path.abspath(os.path.dirname(__file__))
+        ico_path = os.path.join(_base, "logo.ico")
         if os.path.exists(ico_path):
             root.iconbitmap(ico_path)
 
