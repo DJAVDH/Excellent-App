@@ -1144,6 +1144,11 @@ die kan ontstaan aan en rond de woning tijdens leveren, tenzij er sprake en bewi
             return
         tray_code = self._tray_map.get(self.tray_var.get(), 1)
         if self.print_via_gdi(printer_name, images, tray_code):
+            if self.app:
+                try:
+                    self.app.increment_kast_bonnen()
+                except Exception:
+                    pass
             messagebox.showinfo("Succes", f"123kast bon (4 pagina's) verstuurd naar {printer_name}.")
         else:
             messagebox.showerror("Fout", "Kon niet printen.")
@@ -1152,6 +1157,11 @@ die kan ontstaan aan en rond de woning tijdens leveren, tenzij er sprake en bewi
         pdf_path = os.path.abspath("123kast_bon.pdf")
         if not self._build_pdf(pdf_path):
             return
+        if self.app:
+            try:
+                self.app.increment_kast_bonnen()
+            except Exception:
+                pass
         try:
             if os.name == 'nt':
                 os.startfile(pdf_path)
