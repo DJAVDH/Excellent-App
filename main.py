@@ -1269,14 +1269,16 @@ def _check_for_update(root: tk.Tk):
     threading.Thread(target=_worker, daemon=True).start()
 
 
-def _show_update_popup(root: tk.Tk, latest: str, asset_url: str, sha256_url: str | None = None):
+def _show_update_popup(root: tk.Tk, latest: str, asset_url: str, sha256_url=None):
+    import subprocess, tempfile, hashlib
+
     overlay = tk.Frame(root, bg="#000000")
     overlay.place(relx=0, rely=0, relwidth=1, relheight=1)
     overlay.configure(cursor="arrow")
 
     card = tk.Frame(overlay, bg="#FFFFFF",
                     highlightbackground="#E8EAF0", highlightthickness=1)
-    card.place(relx=0.5, rely=0.5, anchor="center", width=420, height=300)
+    card.place(relx=0.5, rely=0.5, anchor="center", width=420, height=270)
 
     header = tk.Frame(card, bg=ACCENT, height=56)
     header.pack(fill=tk.X)
@@ -1304,7 +1306,6 @@ def _show_update_popup(root: tk.Tk, latest: str, asset_url: str, sha256_url: str
     tk.Label(ver_row2, text=latest, bg="#FFFFFF", fg="#4CAF50",
              font=(FONT, 9, "bold")).pack(side=tk.LEFT)
 
-    # Voortgangsbalk
     prog_track = tk.Frame(body, bg="#E8EAF0", height=6)
     prog_track.pack(fill=tk.X, pady=(14, 0))
     prog_track.pack_propagate(False)
@@ -1322,17 +1323,18 @@ def _show_update_popup(root: tk.Tk, latest: str, asset_url: str, sha256_url: str
         except Exception:
             pass
 
+    def _show_error(msg):
+        status_var.set(msg)
+        update_btn.config(text="Opnieuw proberen", state=tk.NORMAL)
+
     def _do_update():
         update_btn.config(text="Bezig...", state=tk.DISABLED)
-        later_btn.config(state=tk.DISABLED)
         status_var.set("Download wordt gestart...")
 
         def _download():
             try:
-                import tempfile, subprocess, hashlib
                 tmp = os.path.join(tempfile.gettempdir(), "ExcellentApp_update.exe")
 
-                # Download met voortgang + gelijktijdig SHA256 berekenen
                 req = urllib.request.urlopen(
                     urllib.request.Request(asset_url, headers={"User-Agent": "Excellent-App"}),
                     timeout=120)
@@ -1353,83 +1355,98 @@ def _show_update_popup(root: tk.Tk, latest: str, asset_url: str, sha256_url: str
                                 status_var.set(f"Downloaden... {p}%"),
                                 _set_progress(p)))
 
-                # SHA256 verificatie
                 if sha256_url:
                     try:
                         with urllib.request.urlopen(sha256_url, timeout=10) as resp:
                             expected = resp.read().decode().strip().split()[0].lower()
                         if h.hexdigest().lower() != expected:
-                            os.remove(tmp)
-                            root.after(0, lambda: (
-                                status_var.set("Hashverificatie mislukt — update geannuleerd."),
-                                update_btn.config(text="Opnieuw proberen", state=tk.NORMAL),
-                                later_btn.config(state=tk.NORMAL)))
+                            try:
+                                os.remove(tmp)
+                            except Exception:
+                                pass
+                            root.after(0, lambda: _show_error(
+                                "Hashverificatie mislukt — update geannuleerd."))
                             return
                     except Exception:
                         pass
 
-                # Alleen als .exe
-                current_exe = sys.executable if getattr(sys, "frozen", False) else None
-                if not current_exe:
-                    root.after(0, lambda: (
-                        status_var.set("Update werkt alleen vanuit de .exe versie."),
-                        update_btn.config(text="Update installeren", state=tk.NORMAL),
-                        later_btn.config(state=tk.NORMAL)))
+                if not getattr(sys, "frozen", False):
+                    root.after(0, lambda: _show_error(
+                        "Update werkt alleen vanuit de .exe versie."))
                     return
 
+                current_exe = sys.executable
                 exe_name = os.path.basename(current_exe)
                 bat = os.path.join(tempfile.gettempdir(), "excellent_update.bat")
-                with open(bat, "w", encoding="utf-8") as f:
+
+                with open(bat, "w") as f:
                     f.write(
                         "@echo off\n"
-                        "timeout /t 3 /nobreak > nul\n"
+                        # Wacht tot app zichzelf sluit (1.5s) + extra marge
+                        "timeout /t 5 /nobreak > nul\n"
+                        # Forceer afsluiten voor de zekerheid
                         f'taskkill /f /im "{exe_name}" > nul 2>&1\n'
-                        ":RETRY\n"
                         "timeout /t 2 /nobreak > nul\n"
+                        # Kopieer met retry (max 15 pogingen)
+                        "set COUNT=0\n"
+                        ":RETRY\n"
+                        "set /a COUNT=COUNT+1\n"
+                        "if %COUNT% gtr 15 goto FAIL\n"
                         f'copy /Y "{tmp}" "{current_exe}" > nul 2>&1\n'
-                        "if errorlevel 1 goto RETRY\n"
-                        "timeout /t 1 /nobreak > nul\n"
+                        "if errorlevel 1 (\n"
+                        "    timeout /t 2 /nobreak > nul\n"
+                        "    goto RETRY\n"
+                        ")\n"
+                        # Wacht even voor schijf flush
+                        "timeout /t 2 /nobreak > nul\n"
                         f'start "" "{current_exe}"\n'
-                        f'del "{tmp}" > nul 2>&1\n'
-                        'del "%~f0"\n'
+                        f'del /f /q "{tmp}" > nul 2>&1\n'
+                        'del /f /q "%~f0"\n'
+                        "exit /b 0\n"
+                        ":FAIL\n"
+                        f'del /f /q "{tmp}" > nul 2>&1\n'
+                        'del /f /q "%~f0"\n'
+                        "exit /b 1\n"
                     )
 
                 def _apply():
-                    status_var.set("Installeren... app start zo opnieuw op.")
-                    _set_progress(100)
-                    overlay.update()
-                    subprocess.Popen(
-                        ["cmd", "/c", bat],
-                        creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW
-                    )
-                    root.after(800, root.destroy)
+                    try:
+                        status_var.set("Installeren... app start zo opnieuw op.")
+                        _set_progress(100)
+                        overlay.update()
+                        # CREATE_NEW_PROCESS_GROUP zorgt dat het proces de parent overleeft
+                        # DEVNULL handles zijn verplicht voor windowed apps zonder console
+                        subprocess.Popen(
+                            ["cmd", "/c", bat],
+                            creationflags=(subprocess.CREATE_NEW_PROCESS_GROUP |
+                                           subprocess.CREATE_NO_WINDOW),
+                            stdin=subprocess.DEVNULL,
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                            close_fds=True,
+                        )
+                        # Geef het bat-script 1.5s om te starten voor we sluiten
+                        root.after(1500, root.destroy)
+                    except Exception as e:
+                        root.after(0, lambda err=str(e): _show_error(
+                            f"Kon update niet starten: {err}"))
 
                 root.after(0, _apply)
 
             except Exception as e:
-                root.after(0, lambda: (
-                    status_var.set(f"Fout: {e}"),
-                    update_btn.config(text="Opnieuw proberen", state=tk.NORMAL),
-                    later_btn.config(state=tk.NORMAL)))
+                root.after(0, lambda err=str(e): _show_error(f"Download mislukt: {err}"))
 
         threading.Thread(target=_download, daemon=True).start()
 
     btn_row = tk.Frame(body, bg="#FFFFFF")
     btn_row.pack(fill=tk.X, pady=(10, 0))
 
-    later_btn = tk.Button(btn_row, text="Later", command=overlay.destroy,
-                          bg="#F0F2F5", fg="#1A1A2E",
-                          activebackground="#E8EAF0", activeforeground="#1A1A2E",
-                          font=(FONT, 9), bd=0, relief=tk.FLAT,
-                          pady=9, padx=16, cursor="hand2")
-    later_btn.pack(side=tk.LEFT)
-
     update_btn = tk.Button(btn_row, text="Update installeren", command=_do_update,
                            bg=ACCENT, fg="#FFFFFF",
                            activebackground="#2E2E4E", activeforeground="#FFFFFF",
                            font=(FONT, 9, "bold"), bd=0, relief=tk.FLAT,
                            pady=9, cursor="hand2")
-    update_btn.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(12, 0))
+    update_btn.pack(fill=tk.X)
 
 
 def _launch_app():
