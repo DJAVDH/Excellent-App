@@ -359,8 +359,9 @@ class KastBonComponent:
             try:
                 self.printer_combo['values'] = names
                 if names and not self.printer_combo.get():
-                    canon = next((p for p in names if 'canon' in p.lower()), None)
-                    self.printer_combo.set(canon or names[0])
+                    canon      = next((p for p in names if 'canon'       in p.lower()), None)
+                    imageforce = next((p for p in names if 'imageforce'  in p.lower()), None)
+                    self.printer_combo.set(canon or imageforce or names[0])
             except Exception:
                 pass
 
@@ -1024,7 +1025,9 @@ die kan ontstaan aan en rond de woning tijdens leveren, tenzij er sprake en bewi
         import ctypes
         import ctypes.wintypes as wintypes
 
+        DM_ORIENTATION   = 0x00000001
         DM_DEFAULTSOURCE = 0x00000200
+        DMORIENT_PORTRAIT = 1
         DM_OUT_BUFFER    = 2
         DM_IN_BUFFER     = 8
         IDOK             = 1
@@ -1062,8 +1065,9 @@ die kan ontstaan aan en rond de woning tijdens leveren, tenzij er sprake en bewi
                         in_buf = (ctypes.c_byte * buf_size)()
                         if winspool.DocumentPropertiesW(0, hPrinter, printer_name, in_buf, None, DM_OUT_BUFFER) == IDOK:
                             dm = DEVMODEW.from_buffer(in_buf)
+                            dm.dmOrientation   = DMORIENT_PORTRAIT
                             dm.dmDefaultSource = tray_code
-                            dm.dmFields |= DM_DEFAULTSOURCE
+                            dm.dmFields |= DM_ORIENTATION | DM_DEFAULTSOURCE
                             out_buf = (ctypes.c_byte * buf_size)()
                             if winspool.DocumentPropertiesW(0, hPrinter, printer_name, out_buf, in_buf, DM_IN_BUFFER | DM_OUT_BUFFER) == IDOK:
                                 devmode_buf = out_buf
