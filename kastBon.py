@@ -1085,9 +1085,24 @@ die kan ontstaan aan en rond de woning tijdens leveren, tenzij er sprake en bewi
                 hDC = win32ui.CreateDC()
                 hDC.CreatePrinterDC(printer_name)
 
+            try:
+                dc_w = hDC.GetDeviceCaps(8)   # HORZRES
+                dc_h = hDC.GetDeviceCaps(10)  # VERTRES
+            except Exception:
+                dc_w = dc_h = 0
+
+            from PIL import Image as _PILImg, ImageWin as IW
             for img in images:
                 if img.mode != 'RGB':
                     img = img.convert('RGB')
+                if dc_w > 0 and dc_h > 0:
+                    # Landscape DC maar portrait inhoud: draai 90° CCW
+                    if dc_w > dc_h and img.size[1] > img.size[0]:
+                        img = img.transpose(_PILImg.Transpose.ROTATE_90)
+                    # Schaal naar exact de printbare DC-afmetingen zodat
+                    # elke driver (PCL6, UFR II, imageFORCE) identiek print
+                    if img.size != (dc_w, dc_h):
+                        img = img.resize((dc_w, dc_h), _PILImg.LANCZOS)
                 hDC.StartDoc("123kast Bon")
                 hDC.StartPage()
                 try:
@@ -1095,7 +1110,6 @@ die kan ontstaan aan en rond de woning tijdens leveren, tenzij er sprake en bewi
                     oy = hDC.GetDeviceCaps(113)
                 except Exception:
                     ox = oy = 0
-                from PIL import ImageWin as IW
                 IW.Dib(img).draw(hDC.GetHandleOutput(),
                                  (-ox, -oy, img.size[0] - ox, img.size[1] - oy))
                 hDC.EndPage()
