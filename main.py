@@ -954,8 +954,8 @@ class ExcellentApp:
         users = sc.admin_list_users()
         roles_map = {}
         try:
-            res = sc.get_admin_client().table("user_roles").select("user_email, is_admin").execute()
-            roles_map = {r["user_email"]: r["is_admin"] for r in (res.data or [])}
+            res = sc.get_admin_client().table("user_roles").select("user_email, is_admin, is_beta").execute()
+            roles_map = {r["user_email"]: r for r in (res.data or [])}
         except Exception:
             pass
 
@@ -963,15 +963,17 @@ class ExcellentApp:
             # Tabelheader
             col_hdr = tk.Frame(usr_inner, bg=ACCENT)
             col_hdr.pack(fill=tk.X)
-            for txt, w in [("E-mailadres", 300), ("Admin", 80), ("Acties", 200)]:
+            for txt, w in [("E-mailadres", 300), ("Admin", 80), ("Beta", 80), ("Acties", 200)]:
                 tk.Label(col_hdr, text=txt, bg=ACCENT, fg=TEXT_LIGHT,
                          font=(FONT, 9, "bold"), width=w//8, anchor="w",
                          padx=8, pady=5).pack(side=tk.LEFT)
 
             for i, user in enumerate(users):
-                uid   = user.id
-                email = user.email or "—"
-                is_ad = roles_map.get(email, False)
+                uid     = user.id
+                email   = user.email or "—"
+                role    = roles_map.get(email, {})
+                is_ad   = role.get("is_admin", False)
+                is_beta = role.get("is_beta",  False)
                 row_bg = BG_CARD if i % 2 == 0 else "#F7F9FC"
                 row = tk.Frame(usr_inner, bg=row_bg,
                                highlightbackground=BORDER, highlightthickness=1)
@@ -984,6 +986,10 @@ class ExcellentApp:
                          fg=GREEN if is_ad else TEXT_MUTED,
                          font=(FONT, 9, "bold"), width=80//8, anchor="w",
                          padx=8).pack(side=tk.LEFT)
+                tk.Label(row, text="✓" if is_beta else "—", bg=row_bg,
+                         fg="#FF9800" if is_beta else TEXT_MUTED,
+                         font=(FONT, 9, "bold"), width=80//8, anchor="w",
+                         padx=8).pack(side=tk.LEFT)
 
                 act = tk.Frame(row, bg=row_bg)
                 act.pack(side=tk.LEFT, padx=8)
@@ -994,6 +1000,14 @@ class ExcellentApp:
                           activebackground=BORDER, bd=0, relief=tk.FLAT,
                           font=(FONT, 8, "underline"), cursor="hand2",
                           command=lambda e=email, a=is_ad: self._admin_toggle_role(e, a)
+                          ).pack(side=tk.LEFT, padx=(0, 8))
+
+                beta_txt = "Beta verwijderen" if is_beta else "Maak beta"
+                beta_fg  = "#C62828" if is_beta else "#FF9800"
+                tk.Button(act, text=beta_txt, fg=beta_fg, bg=row_bg,
+                          activebackground=BORDER, bd=0, relief=tk.FLAT,
+                          font=(FONT, 8, "underline"), cursor="hand2",
+                          command=lambda e=email, b=is_beta: self._admin_toggle_beta(e, b)
                           ).pack(side=tk.LEFT, padx=(0, 8))
 
                 tk.Button(act, text="Reset wachtwoord", fg="#1565C0", bg=row_bg,
@@ -1074,6 +1088,13 @@ class ExcellentApp:
     def _admin_toggle_role(self, email, current_is_admin):
         try:
             sc.admin_set_admin_role(email, not current_is_admin)
+            self.show_admin_page()
+        except Exception as e:
+            messagebox.showerror("Fout", str(e))
+
+    def _admin_toggle_beta(self, email, current_is_beta):
+        try:
+            sc.admin_set_beta_role(email, not current_is_beta)
             self.show_admin_page()
         except Exception as e:
             messagebox.showerror("Fout", str(e))
@@ -1244,10 +1265,17 @@ def _check_for_update(root: tk.Tk):
     """Controleer op de achtergrond op updates en toon popup bij nieuwe versie."""
     def _worker():
         try:
-            url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+            if sc.is_beta_tester():
+                url = f"https://api.github.com/repos/{GITHUB_REPO}/releases"
+            else:
+                url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
             req = urllib.request.Request(url, headers={"User-Agent": "Excellent-App"})
             with urllib.request.urlopen(req, timeout=5) as resp:
                 data = json.loads(resp.read())
+            if isinstance(data, list):
+                if not data:
+                    return
+                data = data[0]
             latest = data.get("tag_name", "")
             if not latest or latest == VERSION or VERSION == "dev":
                 return
@@ -1373,47 +1401,25 @@ def _show_update_popup(root: tk.Tk, latest: str, asset_url: str, sha256_url=None
                     return
 
                 current_exe = sys.executable
-                bat = os.path.join(tempfile.gettempdir(), "excellent_update.bat")
-                vbs = os.path.join(tempfile.gettempdir(), "excellent_update_launch.vbs")
-
-                # Geen taskkill: app sluit zichzelf netjes zodat PyInstaller
-                # de _MEI-tempmap opruimt. Taskkill force-kills het process
-                # waardoor de tempmap half achterblijft en de nieuwe exe
-                # python313.dll niet kan laden uit die beschadigde map.
-                with open(bat, "w") as f:
+                ps1 = os.path.join(tempfile.gettempdir(), "excellent_update.ps1")
+                src_ps = tmp.replace("'", "''")
+                dst_ps = current_exe.replace("'", "''")
+                with open(ps1, "w", encoding="utf-8") as f:
                     f.write(
-                        "@echo off\n"
-                        "timeout /t 6 /nobreak > nul\n"
-                        "set COUNT=0\n"
-                        ":RETRY\n"
-                        "set /a COUNT=COUNT+1\n"
-                        "if %COUNT% gtr 20 goto FAIL\n"
-                        f'copy /Y "{tmp}" "{current_exe}" > nul 2>&1\n'
-                        "if errorlevel 1 (\n"
-                        "    timeout /t 2 /nobreak > nul\n"
-                        "    goto RETRY\n"
-                        ")\n"
-                        "timeout /t 2 /nobreak > nul\n"
-                        f'start "" "{current_exe}"\n'
-                        f'del /f /q "{tmp}" > nul 2>&1\n'
-                        f'del /f /q "{vbs}" > nul 2>&1\n'
-                        'del /f /q "%~f0"\n'
-                        "exit /b 0\n"
-                        ":FAIL\n"
-                        f'del /f /q "{tmp}" > nul 2>&1\n'
-                        f'del /f /q "{vbs}" > nul 2>&1\n'
-                        'del /f /q "%~f0"\n'
-                        "exit /b 1\n"
-                    )
-
-                # VBScript met WindowStyle=0 is gegarandeerd onzichtbaar.
-                # cmd /c met CREATE_NO_WINDOW werkt niet betrouwbaar op
-                # windowed apps die geen console handle hebben.
-                bat_q = bat.replace('"', '""')
-                with open(vbs, "w") as f:
-                    f.write(
-                        'Set sh = CreateObject("WScript.Shell")\n'
-                        f'sh.Run "cmd /c ""{bat_q}""", 0, False\n'
+                        f"$src = [System.IO.Path]::GetFullPath('{src_ps}')\n"
+                        f"$dst = [System.IO.Path]::GetFullPath('{dst_ps}')\n"
+                        "Start-Sleep -Seconds 6\n"
+                        "for ($i = 0; $i -lt 20; $i++) {\n"
+                        "    try {\n"
+                        "        Copy-Item -LiteralPath $src -Destination $dst -Force -ErrorAction Stop\n"
+                        "        break\n"
+                        "    } catch {\n"
+                        "        Start-Sleep -Seconds 2\n"
+                        "    }\n"
+                        "}\n"
+                        "Start-Process -LiteralPath $dst\n"
+                        "Remove-Item -LiteralPath $src -Force -ErrorAction SilentlyContinue\n"
+                        "Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue\n"
                     )
 
                 def _apply():
@@ -1422,7 +1428,8 @@ def _show_update_popup(root: tk.Tk, latest: str, asset_url: str, sha256_url=None
                         _set_progress(100)
                         overlay.update()
                         subprocess.Popen(
-                            ["wscript.exe", "/nologo", vbs],
+                            ["powershell.exe", "-NonInteractive", "-WindowStyle", "Hidden",
+                             "-ExecutionPolicy", "Bypass", "-File", ps1],
                             creationflags=subprocess.CREATE_NO_WINDOW,
                             stdin=subprocess.DEVNULL,
                             stdout=subprocess.DEVNULL,

@@ -56,3 +56,4 @@ jobs:
           name: "Excellent App v1.${{ github.run_number }}"
           body: "Automatische build van commit ${{ github.sha }}"
           files: dist/Excellent App.exe
+          prerelease: true
